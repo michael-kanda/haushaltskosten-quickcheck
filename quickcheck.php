@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Haushaltskosten Quickcheck
  * Plugin URI:  https://pro-finanz.at
- * Description: Finanz-Quickcheck Wizard mit Haushaltskosten-Analyse. Shortcode: [quickcheck] – optional mit Partner-ID: [quickcheck partner="rh"]
- * Version:     2.0.0
+ * Description: Finanz-Quickcheck Wizard mit Haushaltskosten-Analyse. Shortcode: [quickcheck] — optional mit Partner-ID: [quickcheck partner="rh"]
+ * Version:     2.1.0
  * Author:      Pro-Finanz
  * Text Domain: quickcheck
  */
@@ -12,28 +12,24 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'QC_VERSION', '2.0.0' );
+define( 'QC_VERSION', '2.1.0' );
 define( 'QC_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'QC_URL',     plugin_dir_url( __FILE__ ) );
 
-/* ── Partner-Daten ── */
-function qc_get_partners() {
-    return array(
-        'rh' => array( 'name' => 'Riccardo Hüttner',     'email' => 'riccardo.huettner@pro-finanz.at',   'role' => 'Geschäftsführer',        'phone' => '' ),
-        'pp' => array( 'name' => 'Patrick Pichler',       'email' => 'patrick.pichler@pro-finanz.at',     'role' => 'Regionalleiter',         'phone' => '0681/10607628' ),
-        'ab' => array( 'name' => 'Aleksandar Bumbes',     'email' => 'aleksandar.bumbes@pro-finanz.at',   'role' => 'Gebietsleiter',          'phone' => '0660/3658092' ),
-        'mw' => array( 'name' => 'Michael Wimmer',        'email' => 'michael.wimmer@pro-finanz.at',      'role' => 'Vertriebsmitarbeiter',   'phone' => '0676/9301771' ),
-        'md' => array( 'name' => 'Markus Dominik',        'email' => 'markus.dominik@pro-finanz.at',      'role' => 'Vertriebsmitarbeiter',   'phone' => '0660/9185556' ),
-        'hs' => array( 'name' => 'Hosse Sargsjan',        'email' => 'hosse.sargsjan@pro-finanz.at',      'role' => 'Vertriebsmitarbeiter',   'phone' => '0676/4077445' ),
-        'iy' => array( 'name' => 'Ismail Yilmaz',         'email' => 'ismail.yilmaz@pro-finanz.at',       'role' => 'Vertriebsmitarbeiter',   'phone' => '0676/3171671' ),
-        'eh' => array( 'name' => 'Elias Hüttner',         'email' => 'elias.huettner@pro-finanz.at',      'role' => 'Geschäftsführer',        'phone' => '0670/7727191' ),
-        'sb' => array( 'name' => 'Sabrina Bättig',        'email' => 'sabrina.baettig@pro-finanz.at',     'role' => 'Vertriebsmitarbeiter',   'phone' => '0650/3669633' ),
-        'ch' => array( 'name' => 'Christoph Hillinger',   'email' => 'christoph.hillinger@pro-finanz.at', 'role' => 'Regionalleiter',         'phone' => '0676/9581022' ),
-        'mg' => array( 'name' => 'Marcel Gruber',         'email' => 'marcel.gruber@pro-finanz.at',       'role' => 'Vertriebsmitarbeiter',   'phone' => '0650/6800081' ),
-    );
+/* ═══════════ Module laden ═══════════ */
+require_once QC_DIR . 'includes/class-qc-partners.php';
+
+if ( is_admin() ) {
+    require_once QC_DIR . 'admin/class-qc-admin.php';
+    new QC_Admin();
 }
 
-/* ══════════ SHORTCODE ══════════ */
+/* ═══════════ Partner-Daten (dynamisch aus DB) ═══════════ */
+function qc_get_partners() {
+    return QC_Partners::get_all();
+}
+
+/* ═══════════ SHORTCODE ═══════════ */
 function qc_shortcode( $atts ) {
     $atts = shortcode_atts( array( 'partner' => '' ), $atts, 'quickcheck' );
 
@@ -51,7 +47,7 @@ function qc_shortcode( $atts ) {
 }
 add_shortcode( 'quickcheck', 'qc_shortcode' );
 
-/* ══════════ ASSETS ══════════ */
+/* ═══════════ ASSETS ═══════════ */
 function qc_enqueue_assets() {
 
     /* Google Font */
@@ -71,17 +67,17 @@ function qc_enqueue_assets() {
         'https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js',
         array( 'qc-react' ), '18.2.0', true );
 
-    /* prop-types – Recharts braucht das als Global */
+    /* prop-types — Recharts braucht das als Global */
     wp_enqueue_script( 'qc-prop-types',
         'https://unpkg.com/prop-types@15.8.1/prop-types.min.js',
         array( 'qc-react' ), '15.8.1', true );
 
-    /* Recharts – pinned version mit allen Dependencies */
+    /* Recharts — pinned version mit allen Dependencies */
     wp_enqueue_script( 'qc-recharts',
         'https://unpkg.com/recharts@2.12.7/umd/Recharts.js',
         array( 'qc-react', 'qc-react-dom', 'qc-prop-types' ), '2.12.7', true );
 
-    /* App – normales JS, KEIN Babel nötig */
+    /* App — normales JS, kein Babel nötig */
     wp_enqueue_script( 'qc-app',
         QC_URL . 'js/quickcheck-app.js',
         array( 'qc-react', 'qc-react-dom', 'qc-prop-types', 'qc-recharts' ),
@@ -95,7 +91,7 @@ function qc_enqueue_assets() {
     ));
 }
 
-/* ══════════ AJAX HANDLER ══════════ */
+/* ═══════════ AJAX HANDLER ═══════════ */
 add_action( 'wp_ajax_qc_submit',        'qc_handle_submit' );
 add_action( 'wp_ajax_nopriv_qc_submit', 'qc_handle_submit' );
 
@@ -149,7 +145,7 @@ function qc_build_email_body( $payload, $partner ) {
     $kategorien = $payload['kategorien'] ?? array();
     $einkommen  = number_format( floatval( $payload['einkommen'] ?? 0 ), 0, ',', '.' );
     $vollmacht  = ! empty( $payload['vollmacht'] ) ? 'Ja' : 'Nein';
-    $signatur   = ( $payload['signatur'] ?? 'keine' ) === 'vorhanden' ? '✓ Vorhanden' : '✗ Keine';
+    $signatur   = ( $payload['signatur'] ?? 'keine' ) === 'vorhanden' ? '✔ Vorhanden' : '✗ Keine';
 
     ob_start();
     ?>
@@ -168,9 +164,9 @@ function qc_build_email_body( $payload, $partner ) {
         <div style="padding:24px 30px;">
             <h2 style="font-size:16px;border-bottom:2px solid #f5d86b;padding-bottom:6px;">Kontaktdaten</h2>
             <table style="width:100%;font-size:14px;margin-bottom:20px;" cellpadding="4">
-                <tr><td style="color:#999;width:140px;">Name</td><td><strong><?php echo esc_html( $kontakt['name'] ?? '–' ); ?></strong></td></tr>
-                <tr><td style="color:#999;">E-Mail</td><td><?php echo esc_html( $kontakt['email'] ?? '–' ); ?></td></tr>
-                <tr><td style="color:#999;">Telefon</td><td><?php echo esc_html( $kontakt['telefon'] ?? '–' ); ?></td></tr>
+                <tr><td style="color:#999;width:140px;">Name</td><td><strong><?php echo esc_html( $kontakt['name'] ?? '—' ); ?></strong></td></tr>
+                <tr><td style="color:#999;">E-Mail</td><td><?php echo esc_html( $kontakt['email'] ?? '—' ); ?></td></tr>
+                <tr><td style="color:#999;">Telefon</td><td><?php echo esc_html( $kontakt['telefon'] ?? '—' ); ?></td></tr>
             </table>
             <h2 style="font-size:16px;border-bottom:2px solid #f5d86b;padding-bottom:6px;">Quickcheck-Antworten</h2>
             <table style="width:100%;font-size:14px;margin-bottom:20px;" cellpadding="4">
@@ -188,7 +184,7 @@ function qc_build_email_body( $payload, $partner ) {
             foreach ( $labels as $key => $label ) :
                 $val = $quickcheck[ $key ] ?? '';
                 if ( is_array( $val ) ) $val = implode( ', ', $val );
-                if ( empty( $val ) ) $val = '–';
+                if ( empty( $val ) ) $val = '—';
             ?>
                 <tr style="border-bottom:1px solid #f0f0f0;">
                     <td style="color:#999;width:180px;vertical-align:top;"><?php echo esc_html( $label ); ?></td>
@@ -230,10 +226,14 @@ add_action( 'admin_notices', function() {
     if ( get_transient( 'qc_activation_notice' ) ) {
         echo '<div class="notice notice-success is-dismissible">';
         echo '<p><strong>Quickcheck Plugin aktiv!</strong> Shortcode: <code>[quickcheck]</code> oder <code>[quickcheck partner="rh"]</code></p>';
+        echo '<p>Partner verwalten: <a href="' . admin_url( 'admin.php?page=quickcheck' ) . '">Quickcheck → Partner</a></p>';
         echo '</div>';
         delete_transient( 'qc_activation_notice' );
     }
 });
+
 register_activation_hook( __FILE__, function() {
     set_transient( 'qc_activation_notice', true, 60 );
+    /* Initiale Partner-Daten in DB schreiben falls noch nicht vorhanden */
+    QC_Partners::get_all();
 });
