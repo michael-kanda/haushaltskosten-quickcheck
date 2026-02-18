@@ -1,0 +1,84 @@
+/* ═══════════════════════════════════════════════════════
+   Quickcheck – Style-Isolation für Breakdance Theme
+   ═══════════════════════════════════════════════════════ */
+
+/* Container-Reset: Breakdance-Styles neutralisieren */
+#quickcheck-root {
+    all: initial;
+    display: block;
+    font-family: 'Outfit', sans-serif;
+    color: #1a1b25;
+    font-size: 15px;
+    line-height: 1.5;
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+#quickcheck-root *,
+#quickcheck-root *::before,
+#quickcheck-root *::after {
+    box-sizing: border-box;
+}
+
+/* Breakdance setzt oft globale Styles auf Inputs/Buttons – überschreiben */
+#quickcheck-root input,
+#quickcheck-root textarea,
+#quickcheck-root button,
+#quickcheck-root select {
+    font-family: 'Outfit', sans-serif;
+    font-size: inherit;
+    line-height: inherit;
+    margin: 0;
+    letter-spacing: normal;
+}
+
+#quickcheck-root input[type="number"]::-webkit-inner-spin-button,
+#quickcheck-root input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+#quickcheck-root input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+#quickcheck-root button {
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+/* Breakdance link reset */
+#quickcheck-root a {
+    text-decoration: none;
+}
+
+/* Breakdance setzt manchmal max-width auf Container */
+#quickcheck-root > div {
+    max-width: 100% !important;
+}
+
+/* Canvas für Unterschrift – Touch-Optimierung */
+#quickcheck-root canvas {
+    touch-action: none;
+    -ms-touch-action: none;
+}
+
+/* Recharts responsive fix innerhalb Breakdance */
+#quickcheck-root .recharts-responsive-container {
+    width: 100% !important;
+}
+
+/* Transitions */
+#quickcheck-root button {
+    transition: all 0.15s ease;
+}
+#quickcheck-root button:hover {
+    filter: brightness(0.97);
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+    #quickcheck-root {
+        font-size: 14px;
+    }
+}
