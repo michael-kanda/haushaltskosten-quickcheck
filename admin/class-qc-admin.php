@@ -16,8 +16,8 @@ class QC_Admin {
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 
         /* AJAX Endpoints */
-        add_action( 'wp_ajax_qc_admin_get_partners',   array( $this, 'ajax_get_partners' ) );
-        add_action( 'wp_ajax_qc_admin_save_partner',   array( $this, 'ajax_save_partner' ) );
+        add_action( 'wp_ajax_qc_admin_get_partners',    array( $this, 'ajax_get_partners' ) );
+        add_action( 'wp_ajax_qc_admin_save_partner',    array( $this, 'ajax_save_partner' ) );
         add_action( 'wp_ajax_qc_admin_delete_partner',  array( $this, 'ajax_delete_partner' ) );
         add_action( 'wp_ajax_qc_admin_reset_partners',  array( $this, 'ajax_reset_partners' ) );
     }
@@ -76,10 +76,11 @@ class QC_Admin {
         );
 
         wp_localize_script( 'qc-admin-app', 'qcAdmin', array(
-            'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-            'nonce'   => wp_create_nonce( 'qc_admin_nonce' ),
-            'homeUrl' => home_url( '/' ),
-            'roles'   => array(
+            'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
+            'nonce'         => wp_create_nonce( 'qc_admin_nonce' ),
+            'homeUrl'       => home_url( '/' ),
+            'quickcheckUrl' => qc_get_page_url(),
+            'roles'         => array(
                 'Geschäftsführer',
                 'Regionalleiter',
                 'Gebietsleiter',
@@ -233,14 +234,48 @@ class QC_Admin {
 
     /* ═══════════ Einstellungen ═══════════ */
     public function render_settings_page() {
+        /* Speichern */
+        if ( isset( $_POST['qc_save_settings'] ) && wp_verify_nonce( $_POST['_wpnonce'] ?? '', 'qc_settings_nonce' ) ) {
+            $url = esc_url_raw( trim( $_POST['qc_page_url'] ?? '' ) );
+            update_option( 'qc_page_url', $url );
+            echo '<div class="notice notice-success is-dismissible"><p>Einstellungen gespeichert.</p></div>';
+        }
+
+        /* Reset Auto-Detect */
+        if ( isset( $_POST['qc_reset_url'] ) && wp_verify_nonce( $_POST['_wpnonce'] ?? '', 'qc_settings_nonce' ) ) {
+            delete_option( 'qc_page_url' );
+            echo '<div class="notice notice-success is-dismissible"><p>URL zurückgesetzt — wird automatisch neu erkannt.</p></div>';
+        }
+
+        $current_url  = get_option( 'qc_page_url', '' );
+        $detected_url = qc_get_page_url();
         ?>
         <div class="wrap qc-admin-wrap">
             <div class="qc-admin-header">
                 <h1>⚙️ Quickcheck – Einstellungen</h1>
                 <p class="qc-admin-header__sub">Allgemeine Plugin-Einstellungen</p>
             </div>
-            <div class="qc-card">
-                <p>Weitere Einstellungen werden in zukünftigen Versionen verfügbar sein.</p>
+            <div class="qc-card" style="max-width:700px;">
+                <h3>🔗 Quickcheck-Seiten-URL</h3>
+                <p style="color:#666;font-size:14px;">Diese URL wird für die Partner-Links verwendet. Das Plugin versucht automatisch die Seite mit dem <code>[quickcheck]</code> Shortcode zu finden. Falls das nicht klappt, kannst du die URL hier manuell setzen.</p>
+                <form method="post">
+                    <?php wp_nonce_field( 'qc_settings_nonce' ); ?>
+                    <table class="form-table">
+                        <tr>
+                            <th><label for="qc_page_url">Seiten-URL</label></th>
+                            <td>
+                                <input type="url" name="qc_page_url" id="qc_page_url" value="<?php echo esc_attr( $current_url ); ?>" class="regular-text" placeholder="<?php echo esc_attr( $detected_url ); ?>">
+                                <p class="description">
+                                    Aktuell erkannte URL: <code><?php echo esc_html( $detected_url ); ?></code>
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+                    <p class="submit">
+                        <button type="submit" name="qc_save_settings" class="button button-primary qc-btn-gold">Speichern</button>
+                        <button type="submit" name="qc_reset_url" class="button" style="margin-left:8px;">Auto-Detect zurücksetzen</button>
+                    </p>
+                </form>
             </div>
         </div>
         <?php
@@ -250,14 +285,11 @@ class QC_Admin {
        AJAX Handlers
        ═══════════════════════════════════════ */
 
-    /**
-     * Nonce + Capability prüfen (muss VOR jedem $_POST-Zugriff aufgerufen werden)
-     */
     private function verify_nonce() {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Keine Berechtigung.', 403 );
         }
-        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'qc_admin_nonce' ) ) {
+        if ( ! wp_verify_nonce( $_POST['nonce'] ?? '', 'qc_admin_nonce' ) ) {
             wp_send_json_error( 'Ungültige Anfrage.', 403 );
         }
     }
@@ -270,19 +302,19 @@ class QC_Admin {
     public function ajax_save_partner() {
         $this->verify_nonce();
 
-        $key          = isset( $_POST['key'] ) ? sanitize_text_field( wp_unslash( $_POST['key'] ) ) : '';
-        $original_key = isset( $_POST['original_key'] ) ? sanitize_text_field( wp_unslash( $_POST['original_key'] ) ) : '';
-        $mode         = isset( $_POST['mode'] ) ? sanitize_text_field( wp_unslash( $_POST['mode'] ) ) : 'add';
+        $key          = sanitize_text_field( $_POST['key'] ?? '' );
+        $original_key = sanitize_text_field( $_POST['original_key'] ?? '' );
+        $mode         = sanitize_text_field( $_POST['mode'] ?? 'add' );
 
         $data = array(
-            'name'  => isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '',
-            'email' => isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '',
-            'role'  => isset( $_POST['role'] ) ? sanitize_text_field( wp_unslash( $_POST['role'] ) ) : '',
-            'phone' => isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : '',
+            'name'  => sanitize_text_field( $_POST['name'] ?? '' ),
+            'email' => sanitize_email( $_POST['email'] ?? '' ),
+            'role'  => sanitize_text_field( $_POST['role'] ?? '' ),
+            'phone' => sanitize_text_field( $_POST['phone'] ?? '' ),
         );
 
         /* Bei Bearbeitung: wenn Kürzel geändert wurde, altes löschen */
-        if ( 'edit' === $mode && $original_key && $original_key !== $key ) {
+        if ( $mode === 'edit' && $original_key && $original_key !== $key ) {
             /* Prüfe ob neues Kürzel schon existiert */
             if ( QC_Partners::exists( $key ) ) {
                 wp_send_json_error( 'Das Kürzel "' . $key . '" ist bereits vergeben.' );
@@ -291,7 +323,7 @@ class QC_Admin {
         }
 
         /* Bei Neuanlage prüfen ob Kürzel schon existiert */
-        if ( 'add' === $mode && QC_Partners::exists( $key ) ) {
+        if ( $mode === 'add' && QC_Partners::exists( $key ) ) {
             wp_send_json_error( 'Das Kürzel "' . $key . '" ist bereits vergeben.' );
         }
 
@@ -302,7 +334,7 @@ class QC_Admin {
         }
 
         wp_send_json_success( array(
-            'message'  => 'edit' === $mode ? 'Partner aktualisiert.' : 'Partner angelegt.',
+            'message'  => $mode === 'edit' ? 'Partner aktualisiert.' : 'Partner angelegt.',
             'partners' => QC_Partners::get_all(),
         ) );
     }
@@ -310,7 +342,7 @@ class QC_Admin {
     public function ajax_delete_partner() {
         $this->verify_nonce();
 
-        $key    = isset( $_POST['key'] ) ? sanitize_text_field( wp_unslash( $_POST['key'] ) ) : '';
+        $key    = sanitize_text_field( $_POST['key'] ?? '' );
         $result = QC_Partners::delete( $key );
 
         if ( is_wp_error( $result ) ) {

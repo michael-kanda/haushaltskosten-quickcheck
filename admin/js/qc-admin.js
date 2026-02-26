@@ -226,7 +226,8 @@
 
         $.each(keys, function (_, key) {
             var p = partners[key];
-            var link = qcAdmin.homeUrl + '?partner=' + key;
+            var link = (qcAdmin.quickcheckUrl || qcAdmin.homeUrl);
+            link += (link.indexOf('?') === -1 ? '?' : '&') + 'partner=' + encodeURIComponent(key);
 
             var row = '<tr data-key="' + esc(key) + '">' +
                 '<td><span class="qc-badge">' + esc(key) + '</span></td>' +
