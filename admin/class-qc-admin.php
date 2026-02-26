@@ -16,8 +16,8 @@ class QC_Admin {
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 
         /* AJAX Endpoints */
-        add_action( 'wp_ajax_qc_admin_get_partners',    array( $this, 'ajax_get_partners' ) );
-        add_action( 'wp_ajax_qc_admin_save_partner',    array( $this, 'ajax_save_partner' ) );
+        add_action( 'wp_ajax_qc_admin_get_partners',   array( $this, 'ajax_get_partners' ) );
+        add_action( 'wp_ajax_qc_admin_save_partner',   array( $this, 'ajax_save_partner' ) );
         add_action( 'wp_ajax_qc_admin_delete_partner',  array( $this, 'ajax_delete_partner' ) );
         add_action( 'wp_ajax_qc_admin_reset_partners',  array( $this, 'ajax_reset_partners' ) );
     }
@@ -76,10 +76,10 @@ class QC_Admin {
         );
 
         wp_localize_script( 'qc-admin-app', 'qcAdmin', array(
-            'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
-            'nonce'    => wp_create_nonce( 'qc_admin_nonce' ),
-            'homeUrl'  => home_url( '/' ),
-            'roles'    => array(
+            'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+            'nonce'   => wp_create_nonce( 'qc_admin_nonce' ),
+            'homeUrl' => home_url( '/' ),
+            'roles'   => array(
                 'Geschäftsführer',
                 'Regionalleiter',
                 'Gebietsleiter',
@@ -250,11 +250,14 @@ class QC_Admin {
        AJAX Handlers
        ═══════════════════════════════════════ */
 
+    /**
+     * Nonce + Capability prüfen (muss VOR jedem $_POST-Zugriff aufgerufen werden)
+     */
     private function verify_nonce() {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Keine Berechtigung.', 403 );
         }
-        if ( ! wp_verify_nonce( $_POST['nonce'] ?? '', 'qc_admin_nonce' ) ) {
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'qc_admin_nonce' ) ) {
             wp_send_json_error( 'Ungültige Anfrage.', 403 );
         }
     }
@@ -267,19 +270,19 @@ class QC_Admin {
     public function ajax_save_partner() {
         $this->verify_nonce();
 
-        $key          = sanitize_text_field( $_POST['key'] ?? '' );
-        $original_key = sanitize_text_field( $_POST['original_key'] ?? '' );
-        $mode         = sanitize_text_field( $_POST['mode'] ?? 'add' );
+        $key          = isset( $_POST['key'] ) ? sanitize_text_field( wp_unslash( $_POST['key'] ) ) : '';
+        $original_key = isset( $_POST['original_key'] ) ? sanitize_text_field( wp_unslash( $_POST['original_key'] ) ) : '';
+        $mode         = isset( $_POST['mode'] ) ? sanitize_text_field( wp_unslash( $_POST['mode'] ) ) : 'add';
 
         $data = array(
-            'name'  => sanitize_text_field( $_POST['name'] ?? '' ),
-            'email' => sanitize_email( $_POST['email'] ?? '' ),
-            'role'  => sanitize_text_field( $_POST['role'] ?? '' ),
-            'phone' => sanitize_text_field( $_POST['phone'] ?? '' ),
+            'name'  => isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '',
+            'email' => isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '',
+            'role'  => isset( $_POST['role'] ) ? sanitize_text_field( wp_unslash( $_POST['role'] ) ) : '',
+            'phone' => isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : '',
         );
 
         /* Bei Bearbeitung: wenn Kürzel geändert wurde, altes löschen */
-        if ( $mode === 'edit' && $original_key && $original_key !== $key ) {
+        if ( 'edit' === $mode && $original_key && $original_key !== $key ) {
             /* Prüfe ob neues Kürzel schon existiert */
             if ( QC_Partners::exists( $key ) ) {
                 wp_send_json_error( 'Das Kürzel "' . $key . '" ist bereits vergeben.' );
@@ -288,7 +291,7 @@ class QC_Admin {
         }
 
         /* Bei Neuanlage prüfen ob Kürzel schon existiert */
-        if ( $mode === 'add' && QC_Partners::exists( $key ) ) {
+        if ( 'add' === $mode && QC_Partners::exists( $key ) ) {
             wp_send_json_error( 'Das Kürzel "' . $key . '" ist bereits vergeben.' );
         }
 
@@ -299,7 +302,7 @@ class QC_Admin {
         }
 
         wp_send_json_success( array(
-            'message'  => $mode === 'edit' ? 'Partner aktualisiert.' : 'Partner angelegt.',
+            'message'  => 'edit' === $mode ? 'Partner aktualisiert.' : 'Partner angelegt.',
             'partners' => QC_Partners::get_all(),
         ) );
     }
@@ -307,7 +310,7 @@ class QC_Admin {
     public function ajax_delete_partner() {
         $this->verify_nonce();
 
-        $key    = sanitize_text_field( $_POST['key'] ?? '' );
+        $key    = isset( $_POST['key'] ) ? sanitize_text_field( wp_unslash( $_POST['key'] ) ) : '';
         $result = QC_Partners::delete( $key );
 
         if ( is_wp_error( $result ) ) {
