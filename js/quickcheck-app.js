@@ -39,6 +39,7 @@
         { id: "kleidung", label: "Kleidung" },
         { id: "kommunikation", label: "Kommunikation (Internet, Handy)" },
         { id: "abos", label: "Abos" },
+        { id: "leasing", label: "Leasing / Kredit" },
         { id: "kfz", label: "KFZ" },
         { id: "haustiere", label: "Haustiere" },
         { id: "zigaretten", label: "Zigaretten" },
@@ -83,7 +84,8 @@
   }
   function emptySparen() {
     return { giroKontostand: "", giroBank: "", sparMonatlich: "", sparKontostand: "",
-      bausparerMonatlich: "", bausparerKontostand: "", fonds: [], lvMonatlich: "", lvGesellschaft: "" };
+      bausparerMonatlich: "", bausparerKontostand: "", fonds: [], lvMonatlich: "", lvGesellschaft: "",
+      goldMonatlich: "", goldKontostand: "" };
   }
   function emptyFonds() { return { name: "", isin: "", monatlich: "", kontostand: "" }; }
 
@@ -302,7 +304,7 @@
     function getSimpleCatTotal(cat) { return cat.fields.reduce(function (s, f) { return s + (parseFloat(costs[f.id]) || 0); }, 0); }
     function getVersicherungenTotal() { var t = 0; VERSICHERUNG_SPARTEN.forEach(function (s) { t += (parseFloat(versicherungen[s.id].betrag) || 0); }); return t; }
     function getSparenTotal() {
-      var t = (parseFloat(sparen.sparMonatlich) || 0) + (parseFloat(sparen.bausparerMonatlich) || 0) + (parseFloat(sparen.lvMonatlich) || 0);
+      var t = (parseFloat(sparen.sparMonatlich) || 0) + (parseFloat(sparen.bausparerMonatlich) || 0) + (parseFloat(sparen.lvMonatlich) || 0) + (parseFloat(sparen.goldMonatlich) || 0);
       sparen.fonds.forEach(function (f) { t += (parseFloat(f.monatlich) || 0); }); return t;
     }
     function getCategoryTotal(cat) {
@@ -601,7 +603,8 @@
                   h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } },
                     euroField("Mtl. Sparrate", sparen.lvMonatlich, function (v) { updateSparen("lvMonatlich", v); }),
                     h("label", { style: { fontSize: 12, color: TEXT } }, "Gesellschaft",
-                      h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: sparen.lvGesellschaft, onChange: function (e) { updateSparen("lvGesellschaft", e.target.value); }, placeholder: "Versicherung" }) ) ) ) ) ),
+                      h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: sparen.lvGesellschaft, onChange: function (e) { updateSparen("lvGesellschaft", e.target.value); }, placeholder: "Versicherung" }) ) ) ),
+                sparBlock("Gold / Sonstiges", "goldMonatlich", "goldKontostand") ) ),
             /* Versicherungen */
             h("div", { style: { marginBottom: 14 } },
               h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 } },
@@ -640,9 +643,9 @@
                   h("div", { style: { display: "flex", flexDirection: "column", alignItems: "center" } },
                     h("h3", { style: assign({ fontSize: 16, fontWeight: 600, marginBottom: 4 }, hlStyle()) }, "Deine tats\u00e4chliche Verteilung"),
                     h("p", { style: { fontSize: 13, color: "#999", marginBottom: 8 } }, "Optimale Verteilung: 30 / 30 / 30 / 10"),
-                    h(RC.ResponsiveContainer, { width: "100%", height: 280 },
+                    h(RC.ResponsiveContainer, { width: "100%", height: 310 },
                       h(RC.PieChart, null,
-                        h(RC.Pie, { data: chartData, cx: "50%", cy: "50%", innerRadius: 55, outerRadius: 105, paddingAngle: 2, dataKey: "value",
+                        h(RC.Pie, { data: chartData, cx: "50%", cy: "52%", innerRadius: 55, outerRadius: 105, paddingAngle: 2, dataKey: "value",
                           label: function (p) { return p.value + "%"; }, labelLine: false },
                           chartData.map(function (entry, i) { return h(RC.Cell, { key: i, fill: entry.color, stroke: "#fff", strokeWidth: 2 }); }) ),
                         h(RC.Tooltip, { content: h(CustomTooltip) }),
