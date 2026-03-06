@@ -238,6 +238,10 @@ class QC_Admin {
         if ( isset( $_POST['qc_save_settings'] ) && wp_verify_nonce( $_POST['_wpnonce'] ?? '', 'qc_settings_nonce' ) ) {
             $url = esc_url_raw( trim( $_POST['qc_page_url'] ?? '' ) );
             update_option( 'qc_page_url', $url );
+
+            $send_copy = ! empty( $_POST['qc_send_admin_copy'] );
+            update_option( 'qc_send_admin_copy', $send_copy );
+
             echo '<div class="notice notice-success is-dismissible"><p>Einstellungen gespeichert.</p></div>';
         }
 
@@ -247,8 +251,9 @@ class QC_Admin {
             echo '<div class="notice notice-success is-dismissible"><p>URL zurückgesetzt — wird automatisch neu erkannt.</p></div>';
         }
 
-        $current_url  = get_option( 'qc_page_url', '' );
-        $detected_url = qc_get_page_url();
+        $current_url    = get_option( 'qc_page_url', '' );
+        $detected_url   = qc_get_page_url();
+        $send_admin_copy = get_option( 'qc_send_admin_copy', false );
         ?>
         <div class="wrap qc-admin-wrap">
             <div class="qc-admin-header">
@@ -256,26 +261,45 @@ class QC_Admin {
                 <p class="qc-admin-header__sub">Allgemeine Plugin-Einstellungen</p>
             </div>
             <div class="qc-card" style="max-width:700px;">
-                <h3>🔗 Quickcheck-Seiten-URL</h3>
-                <p style="color:#666;font-size:14px;">Diese URL wird für die Partner-Links verwendet. Das Plugin versucht automatisch die Seite mit dem <code>[quickcheck]</code> Shortcode zu finden. Falls das nicht klappt, kannst du die URL hier manuell setzen.</p>
-                <form method="post">
-                    <?php wp_nonce_field( 'qc_settings_nonce' ); ?>
-                    <table class="form-table">
-                        <tr>
-                            <th><label for="qc_page_url">Seiten-URL</label></th>
-                            <td>
-                                <input type="url" name="qc_page_url" id="qc_page_url" value="<?php echo esc_attr( $current_url ); ?>" class="regular-text" placeholder="<?php echo esc_attr( $detected_url ); ?>">
-                                <p class="description">
-                                    Aktuell erkannte URL: <code><?php echo esc_html( $detected_url ); ?></code>
-                                </p>
-                            </td>
-                        </tr>
-                    </table>
-                    <p class="submit">
-                        <button type="submit" name="qc_save_settings" class="button button-primary qc-btn-gold">Speichern</button>
-                        <button type="submit" name="qc_reset_url" class="button" style="margin-left:8px;">Auto-Detect zurücksetzen</button>
-                    </p>
-                </form>
+                <div style="padding:20px 24px;">
+                    <h3 style="margin-top:0;">🔗 Quickcheck-Seiten-URL</h3>
+                    <p style="color:#666;font-size:14px;">Diese URL wird für die Partner-Links verwendet. Das Plugin versucht automatisch die Seite mit dem <code>[quickcheck]</code> Shortcode zu finden. Falls das nicht klappt, kannst du die URL hier manuell setzen.</p>
+                    <form method="post">
+                        <?php wp_nonce_field( 'qc_settings_nonce' ); ?>
+                        <table class="form-table">
+                            <tr>
+                                <th><label for="qc_page_url">Seiten-URL</label></th>
+                                <td>
+                                    <input type="url" name="qc_page_url" id="qc_page_url" value="<?php echo esc_attr( $current_url ); ?>" class="regular-text" placeholder="<?php echo esc_attr( $detected_url ); ?>">
+                                    <p class="description">
+                                        Aktuell erkannte URL: <code><?php echo esc_html( $detected_url ); ?></code>
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <h3>📧 E-Mail-Versand</h3>
+                        <table class="form-table">
+                            <tr>
+                                <th><label for="qc_send_admin_copy">Admin-Kopie</label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="qc_send_admin_copy" id="qc_send_admin_copy" value="1" <?php checked( $send_admin_copy ); ?>>
+                                        Kopie jeder Quickcheck-Einreichung an Admin senden
+                                    </label>
+                                    <p class="description">
+                                        Wenn aktiviert, erhält <code><?php echo esc_html( get_option( 'admin_email' ) ); ?></code> eine Kopie jeder E-Mail, die an einen Partner geht. Die Kopie wird mit dem Betreff-Prefix <code>[Kopie]</code> versehen.
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p class="submit">
+                            <button type="submit" name="qc_save_settings" class="button button-primary qc-btn-gold">Speichern</button>
+                            <button type="submit" name="qc_reset_url" class="button" style="margin-left:8px;">Auto-Detect zurücksetzen</button>
+                        </p>
+                    </form>
+                </div>
             </div>
         </div>
         <?php
