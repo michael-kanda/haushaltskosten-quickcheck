@@ -180,9 +180,12 @@ function qc_handle_submit() {
 
     $sent = wp_mail( $to, $subject, $body, $headers );
 
-    $admin_email = get_option( 'admin_email' );
-    if ( $to !== $admin_email ) {
-        wp_mail( $admin_email, '[Kopie] ' . $subject, $body, $headers );
+    /* Admin-Kopie nur senden wenn in Einstellungen aktiviert */
+    if ( get_option( 'qc_send_admin_copy', false ) ) {
+        $admin_email = get_option( 'admin_email' );
+        if ( $to !== $admin_email ) {
+            wp_mail( $admin_email, '[Kopie] ' . $subject, $body, $headers );
+        }
     }
 
     if ( $sent ) {
