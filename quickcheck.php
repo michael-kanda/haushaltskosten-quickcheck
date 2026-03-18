@@ -175,10 +175,22 @@ function qc_handle_submit() {
 
     $headers = array( 'Content-Type: text/html; charset=UTF-8' );
     if ( $kunde_email ) {
-        $headers[] = 'Reply-To: ' . $kunde_name . ' <' . $kunde_email . '>';
+        /* RFC 2047-encode display name for SMTP compatibility (umlauts etc.) */
+        $encoded_name = '=?UTF-8?B?' . base64_encode( $kunde_name ) . '?=';
+        $headers[] = 'Reply-To: ' . $encoded_name . ' <' . $kunde_email . '>';
     }
 
+    /* Debug: log mail errors */
+    $mail_error = '';
+    add_action( 'wp_mail_failed', function( $wp_error ) use ( &$mail_error ) {
+        $mail_error = $wp_error->get_error_message();
+    });
+
     $sent = wp_mail( $to, $subject, $body, $headers );
+
+    if ( ! $sent && $mail_error ) {
+        error_log( 'QC Mail Error: ' . $mail_error );
+    }
 
     /* Admin-Kopie nur senden wenn in Einstellungen aktiviert */
     if ( get_option( 'qc_send_admin_copy', false ) ) {
@@ -191,7 +203,11 @@ function qc_handle_submit() {
     if ( $sent ) {
         wp_send_json_success( 'E-Mail erfolgreich gesendet.' );
     } else {
-        wp_send_json_error( 'E-Mail konnte nicht gesendet werden.', 500 );
+        $msg = 'E-Mail konnte nicht gesendet werden.';
+        if ( $mail_error && current_user_can( 'manage_options' ) ) {
+            $msg .= ' Fehler: ' . $mail_error;
+        }
+        wp_send_json_error( $msg, 500 );
     }
 }
 
@@ -234,7 +250,7 @@ function qc_build_email_body( $payload, $partner ) {
     $gesellschaften = $payload['gesellschaften'] ?? array();
     $einkommen      = number_format( floatval( $payload['einkommen'] ?? 0 ), 0, ',', '.' );
     $vollmacht      = ! empty( $payload['vollmacht'] ) ? 'Ja' : 'Nein';
-    $signatur       = ( $payload['signatur'] ?? 'keine' ) === 'vorhanden' ? '✔ Vorhanden' : '✗ Keine';
+    $signatur       = ( $payload['signatur'] ?? 'keine' ) === 'vorhanden' ? 'Vorhanden' : 'Keine';
     $anz_personen   = intval( $payload['kontaktPersonen'] ?? 1 );
 
     ob_start();
@@ -245,7 +261,7 @@ function qc_build_email_body( $payload, $partner ) {
     <body style="font-family:'Outfit',Arial,sans-serif;color:#1a1b25;background:#f9f9f9;padding:20px;">
     <div style="max-width:680px;margin:0 auto;background:#fff;border-radius:6px;overflow:hidden;border:1px solid #e5e5e5;">
         <div style="background:linear-gradient(90deg,#c6a559,#f5d86b);padding:24px 30px;">
-            <h1 style="margin:0;font-size:22px;color:#1a1b25;">📊 Quickcheck-Ergebnis</h1>
+            <h1 style="margin:0;font-size:22px;color:#1a1b25;">Quickcheck-Ergebnis</h1>
             <p style="margin:6px 0 0;font-size:14px;color:#5a5030;">
                 <?php echo esc_html( $kontakt['name'] ?? 'Unbekannt' ); ?>
                 <?php if ( $anz_personen > 1 && !empty( $personB['name'] ) ) : ?> & <?php echo esc_html( $personB['name'] ); ?><?php endif; ?>
@@ -299,7 +315,7 @@ function qc_build_email_body( $payload, $partner ) {
                 'zukunftWunsch' => 'Zukunftswunsch',
                 'absicherung' => 'Absicherung', 'investmentRisiko' => 'Investment – Risiko',
                 'investmentZeit' => 'Investment – Zeithorizont', 'erfahrung' => 'Erfahrung',
-                'beratungWichtig' => 'Beratung – Wichtig', 'wichtigsteFrage' => '⭐ Wichtigste Frage',
+                'beratungWichtig' => 'Beratung – Wichtig', 'wichtigsteFrage' => 'Wichtigste Frage',
                 'abschlussfrage' => 'Abschlussfrage',
             );
             foreach ( $labels as $key => $label ) :
