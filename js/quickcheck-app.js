@@ -267,7 +267,8 @@
       erfahrung: "", beratungWichtig: [], wichtigsteFrage: "", abschlussfrage: ""
     }); var form = sForm[0]; var setForm = sForm[1];
     /* Haushaltskosten */
-    var sEink = useState(""); var einkommen = sEink[0]; var setEinkommen = sEink[1];
+    var sEinkA = useState(""); var einkommenA = sEinkA[0]; var setEinkommenA = sEinkA[1];
+    var sEinkB = useState(""); var einkommenB = sEinkB[0]; var setEinkommenB = sEinkB[1];
     var sCosts = useState({}); var costs = sCosts[0]; var setCosts = sCosts[1];
     var sVers = useState(emptyVersicherung()); var versicherungen = sVers[0]; var setVersicherungen = sVers[1];
     var sSpar = useState(emptySparen()); var sparen = sSpar[0]; var setSparen = sSpar[1];
@@ -361,8 +362,7 @@
       { title: "6. Absicherung", sub: "Welche Bereiche m\u00f6chtest du abgesichert wissen?" },
       { title: "7. Investment & Verm\u00f6gensaufbau", sub: "Deine Einstellung zu Risiko und Zeithorizont" },
       { title: "8. Erfahrung & Erwartungen", sub: "Deine bisherigen Erfahrungen" },
-      { title: "9. Die wichtigste Frage", sub: "Pflichtfeld" },
-      { title: "Abschlussfrage", sub: "Was ist dir besonders wichtig?" },
+      { title: "9. Die wichtigste Frage", sub: "Nimm dir einen Moment Zeit" },
       { title: "Haushaltskosten-Check", sub: "Monatliche Ausgaben je Bereich" },
       { title: "Dein Ergebnis", sub: "Analyse deiner Haushaltskosten" },
       { title: "Vollmacht & Absenden", sub: "Letzte Schritte" },
@@ -383,7 +383,8 @@
         einstiegsfragen: einstieg, kontaktPersonen: zweiPersonen ? 2 : 1,
         personA: personA, personB: zweiPersonen ? personB : null, kinder: kinder,
         kontakt: { name: personA.name, email: personA.email, telefon: personA.telefon },
-        quickcheck: form, einkommen: parseFloat(einkommen) || 0,
+        quickcheck: form, einkommen: (parseFloat(einkommenA) || 0) + (zweiPersonen ? (parseFloat(einkommenB) || 0) : 0),
+        einkommenA: parseFloat(einkommenA) || 0, einkommenB: zweiPersonen ? (parseFloat(einkommenB) || 0) : null,
         kosten: costs, versicherungen: versicherungen, sparen: sparen,
         kategorien: CATEGORIES.map(function (cat) {
           return { name: cat.label, betrag: getCategoryTotal(cat), prozent: totalCosts > 0 ? Math.round((getCategoryTotal(cat) / totalCosts) * 100) : 0, optimal: cat.optimal };
@@ -547,24 +548,38 @@
             secTitle("Was ist dir in der Beratung besonders wichtig?"),
             h(CheckGroup, { options: ["Verst\u00e4ndliche Erkl\u00e4rungen","Transparenz","Langfristige Begleitung","Sicherheit","Unabh\u00e4ngigkeit","Vergleichsm\u00f6glichkeiten"], selected: form.beratungWichtig, onChange: function (v) { updateForm("beratungWichtig", v); } }) );
 
-        /* 10: Wichtigste Frage */
+        /* 10: Wichtigste Frage + Abschlussfrage (zusammengefasst) */
         case 10:
           return h("div", null,
             h("div", { style: { background: "#fdf8e8", borderLeft: "3px solid " + GOLD_DARK, padding: "10px 14px", borderRadius: "0 " + R + "px " + R + "px 0", marginBottom: 14, fontSize: 14, color: "#666" } }, "Pflichtfeld \u2013 nimm dir einen Moment Zeit."),
-            h("textarea", { style: ta, value: form.wichtigsteFrage, onChange: function (e) { updateForm("wichtigsteFrage", e.target.value); }, placeholder: "Was ist dir pers\u00f6nlich beim Thema Finanzen am wichtigsten?" }) );
+            h("label", { style: { display: "block", marginBottom: 16, fontSize: 14, color: "#555" } },
+              "Was ist dir pers\u00f6nlich beim Thema Finanzen am wichtigsten?",
+              h("textarea", { style: assign({}, ta, { marginTop: 6 }), value: form.wichtigsteFrage, onChange: function (e) { updateForm("wichtigsteFrage", e.target.value); }, placeholder: "Was ist dir pers\u00f6nlich beim Thema Finanzen am wichtigsten?" }) ),
+            h("label", { style: { display: "block", fontSize: 14, color: "#555" } },
+              "Was darf in einem Finanzkonzept f\u00fcr dich auf keinen Fall fehlen?",
+              h("textarea", { style: assign({}, ta, { marginTop: 6 }), value: form.abschlussfrage, onChange: function (e) { updateForm("abschlussfrage", e.target.value); }, placeholder: "Was darf in einem Finanzkonzept f\u00fcr dich auf keinen Fall fehlen?" }) ) );
 
-        /* 11: Abschlussfrage (gek\u00fcrzt) */
+        /* 11: Haushaltskosten (komplett neu) */
         case 11:
-          return h("textarea", { style: ta, value: form.abschlussfrage, onChange: function (e) { updateForm("abschlussfrage", e.target.value); }, placeholder: "Was darf in einem Finanzkonzept f\u00fcr dich auf keinen Fall fehlen?" });
-
-        /* 12: Haushaltskosten (komplett neu) */
-        case 12:
           return h("div", null,
-            h("label", { style: { fontWeight: 600, fontSize: 14, display: "block", marginBottom: 18, color: TEXT } },
-              "Monatliches Netto-Einkommen (Haushalt)",
-              h("div", { style: { position: "relative", marginTop: 4 } },
-                h("input", { style: assign({}, inp, { paddingLeft: 28 }), type: "number", value: einkommen, onChange: function (e) { setEinkommen(e.target.value); }, placeholder: "z.B. 3500" }),
-                h("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#999" } }, "\u20AC") ) ),
+            zweiPersonen
+              ? h("div", { style: { marginBottom: 18 } },
+                  h("div", { style: { fontWeight: 600, fontSize: 14, color: TEXT, marginBottom: 10 } }, "Monatliches Netto-Einkommen"),
+                  h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+                    h("label", { style: { fontWeight: 500, fontSize: 13, color: TEXT, display: "block" } }, (personA.name || "Person A"),
+                      h("div", { style: { position: "relative", marginTop: 4 } },
+                        h("input", { style: assign({}, inp, { paddingLeft: 28 }), type: "number", value: einkommenA, onChange: function (e) { setEinkommenA(e.target.value); }, placeholder: "z.B. 2500" }),
+                        h("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#999" } }, "\u20AC") ) ),
+                    h("label", { style: { fontWeight: 500, fontSize: 13, color: TEXT, display: "block" } }, (personB.name || "Person B"),
+                      h("div", { style: { position: "relative", marginTop: 4 } },
+                        h("input", { style: assign({}, inp, { paddingLeft: 28 }), type: "number", value: einkommenB, onChange: function (e) { setEinkommenB(e.target.value); }, placeholder: "z.B. 2500" }),
+                        h("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#999" } }, "\u20AC") ) ) ),
+                  h("div", { style: { fontSize: 13, color: "#999", marginTop: 6, textAlign: "right" } }, "Gesamt: \u20AC " + ((parseFloat(einkommenA) || 0) + (parseFloat(einkommenB) || 0)).toLocaleString("de-AT")) )
+              : h("label", { style: { fontWeight: 600, fontSize: 14, display: "block", marginBottom: 18, color: TEXT } },
+                  "Monatliches Netto-Einkommen",
+                  h("div", { style: { position: "relative", marginTop: 4 } },
+                    h("input", { style: assign({}, inp, { paddingLeft: 28 }), type: "number", value: einkommenA, onChange: function (e) { setEinkommenA(e.target.value); }, placeholder: "z.B. 3500" }),
+                    h("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#999" } }, "\u20AC") ) ),
             renderSimpleCat(CATEGORIES[0]),
             renderSimpleCat(CATEGORIES[1]),
             /* Sparen / Investment */
@@ -625,9 +640,9 @@
                         h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: v.bmstufe, onChange: function (e) { updateVers(sp.id, "bmstufe", e.target.value); }, placeholder: "z.B. 0" }) ) ));
                 }) ) ) );
 
-        /* 13: Ergebnis */
-        case 13:
-          var chartData = getChartData(); var einkommenNum = parseFloat(einkommen) || 0;
+        /* 12: Ergebnis */
+        case 12:
+          var chartData = getChartData(); var einkommenNum = (parseFloat(einkommenA) || 0) + (zweiPersonen ? (parseFloat(einkommenB) || 0) : 0);
           return h("div", null,
             totalCosts === 0
               ? h("div", { style: { textAlign: "center", padding: 32, color: "#999" } }, "Bitte gib im vorherigen Schritt deine monatlichen Ausgaben ein.")
@@ -664,8 +679,8 @@
                         h("div", { style: { fontSize: 13, color: s.cl, marginTop: 4 } }, rec.text) );
                     }) ) ) );
 
-        /* 14: Vollmacht + Absenden */
-        case 14:
+        /* 13: Vollmacht + Absenden */
+        case 13:
           var gesellschaften = getGesellschaften();
           return h("div", null,
             h("div", { style: { background: "#fafafa", borderRadius: R, padding: 18, marginBottom: 18, border: "1px solid #eee" } },
