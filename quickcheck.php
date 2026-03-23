@@ -174,10 +174,18 @@ function qc_handle_submit() {
     $body    = qc_build_email_body( $payload, $partner );
 
     $headers = array( 'Content-Type: text/html; charset=UTF-8' );
+
+    /* Explicit From header – must match the domain configured in the SMTP plugin */
+    $from_email = get_option( 'qc_from_email', get_option( 'admin_email' ) );
+    $from_name  = get_option( 'qc_from_name', 'Quickcheck' );
+    $headers[]  = 'From: ' . $from_name . ' <' . $from_email . '>';
+
     if ( $kunde_email ) {
-        /* RFC 2047-encode display name for SMTP compatibility (umlauts etc.) */
-        $encoded_name = '=?UTF-8?B?' . base64_encode( $kunde_name ) . '?=';
-        $headers[] = 'Reply-To: ' . $encoded_name . ' <' . $kunde_email . '>';
+        /*
+         * Reply-To: use bare email only – avoids double-encoding conflicts
+         * with SMTP plugins that re-encode RFC 2047 names.
+         */
+        $headers[] = 'Reply-To: ' . $kunde_email;
     }
 
     /* Debug: log mail errors */
@@ -185,6 +193,11 @@ function qc_handle_submit() {
     add_action( 'wp_mail_failed', function( $wp_error ) use ( &$mail_error ) {
         $mail_error = $wp_error->get_error_message();
     });
+
+    /* Log outgoing headers for debugging (remove once stable) */
+    error_log( 'QC Mail Headers: ' . wp_json_encode( $headers ) );
+    error_log( 'QC Mail To: ' . $to );
+    error_log( 'QC Mail Body size: ' . strlen( $body ) . ' bytes' );
 
     $sent = wp_mail( $to, $subject, $body, $headers );
 
@@ -206,6 +219,7 @@ function qc_handle_submit() {
         $msg = 'E-Mail konnte nicht gesendet werden.';
         if ( $mail_error && current_user_can( 'manage_options' ) ) {
             $msg .= ' Fehler: ' . $mail_error;
+            $msg .= ' (Body: ' . strlen( $body ) . ' Bytes, To: ' . $to . ')';
         }
         wp_send_json_error( $msg, 500 );
     }
