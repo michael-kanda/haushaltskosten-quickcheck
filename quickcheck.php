@@ -174,30 +174,23 @@ function qc_handle_submit() {
     $body    = qc_build_email_body( $payload, $partner );
 
     $headers = array( 'Content-Type: text/html; charset=UTF-8' );
-
-    /* Explicit From header – must match the domain configured in the SMTP plugin */
-    $from_email = get_option( 'qc_from_email', get_option( 'admin_email' ) );
-    $from_name  = get_option( 'qc_from_name', 'Quickcheck' );
-    $headers[]  = 'From: ' . $from_name . ' <' . $from_email . '>';
-
     if ( $kunde_email ) {
         /*
-         * Reply-To: use bare email only – avoids double-encoding conflicts
-         * with SMTP plugins that re-encode RFC 2047 names.
+         * Reply-To: nur E-Mail-Adresse, KEIN RFC 2047-kodierter Name.
+         * FluentSMTP / PHPMailer kodiert Header selbst – manuelle
+         * Base64-Kodierung führt zu Doppelkodierung und wird von
+         * securemail.pro mit 422 "data not accepted" abgelehnt.
          */
         $headers[] = 'Reply-To: ' . $kunde_email;
     }
 
-    /* Debug: log mail errors */
+    /* Debug: log mail errors + headers (nach Stabilisierung entfernen) */
     $mail_error = '';
     add_action( 'wp_mail_failed', function( $wp_error ) use ( &$mail_error ) {
         $mail_error = $wp_error->get_error_message();
     });
 
-    /* Log outgoing headers for debugging (remove once stable) */
-    error_log( 'QC Mail Headers: ' . wp_json_encode( $headers ) );
-    error_log( 'QC Mail To: ' . $to );
-    error_log( 'QC Mail Body size: ' . strlen( $body ) . ' bytes' );
+    error_log( 'QC Mail → To: ' . $to . ' | Headers: ' . wp_json_encode( $headers ) . ' | Body: ' . strlen( $body ) . ' Bytes' );
 
     $sent = wp_mail( $to, $subject, $body, $headers );
 
@@ -218,8 +211,7 @@ function qc_handle_submit() {
     } else {
         $msg = 'E-Mail konnte nicht gesendet werden.';
         if ( $mail_error && current_user_can( 'manage_options' ) ) {
-            $msg .= ' Fehler: ' . $mail_error;
-            $msg .= ' (Body: ' . strlen( $body ) . ' Bytes, To: ' . $to . ')';
+            $msg .= ' Fehler: ' . $mail_error . ' (Body: ' . strlen( $body ) . ' Bytes)';
         }
         wp_send_json_error( $msg, 500 );
     }
