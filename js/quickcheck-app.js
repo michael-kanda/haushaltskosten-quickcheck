@@ -79,13 +79,15 @@
   function emptyKind() { return { name: "", gebDatum: "", gebOrt: "", groesse: "", gewicht: "" }; }
   function emptyVersicherung() {
     var v = {};
-    VERSICHERUNG_SPARTEN.forEach(function (s) { v[s.id] = { betrag: "", gesellschaft: "", qm: "", bmstufe: "" }; });
+    VERSICHERUNG_SPARTEN.forEach(function (s) { v[s.id] = [{ betrag: "", gesellschaft: "", qm: "", bmstufe: "" }]; });
     return v;
   }
+  function emptyVersEintrag() { return { betrag: "", gesellschaft: "", qm: "", bmstufe: "" }; }
   function emptySparen() {
-    return { giroKontostand: "", giroBank: "", sparMonatlich: "", sparKontostand: "",
-      bausparerMonatlich: "", bausparerKontostand: "", fonds: [], lvMonatlich: "", lvGesellschaft: "",
-      goldMonatlich: "", goldKontostand: "" };
+    return { girokonten: [{ kontostand: "", bank: "" }], sparkonten: [{ monatlich: "", kontostand: "" }],
+      bausparer: [{ monatlich: "", kontostand: "" }], fonds: [],
+      lebensversicherungen: [{ monatlich: "", gesellschaft: "" }],
+      gold: [{ monatlich: "", kontostand: "" }] };
   }
   function emptyFonds() { return { name: "", isin: "", monatlich: "", kontostand: "" }; }
 
@@ -261,7 +263,7 @@
     var sKinder = useState([]); var kinder = sKinder[0]; var setKinder = sKinder[1];
     /* Quickcheck */
     var sForm = useState({
-      themen: [], themenSonstig: "", prioritaeten: [], wohnen: [], familie: [],
+      themen: [], themenSonstig: "", prioritaeten: [], wohnen: [], wohnenNotizen: "", familie: [],
       pensionGefuehl: "", zukunftWunsch: "", pensionHoehe: "", pensionAlter: "",
       absicherung: [], investmentRisiko: "", investmentZeit: "",
       erfahrung: "", beratungWichtig: [], wichtigsteFrage: "", abschlussfrage: ""
@@ -272,6 +274,8 @@
     var sCosts = useState({}); var costs = sCosts[0]; var setCosts = sCosts[1];
     var sVers = useState(emptyVersicherung()); var versicherungen = sVers[0]; var setVersicherungen = sVers[1];
     var sSpar = useState(emptySparen()); var sparen = sSpar[0]; var setSparen = sSpar[1];
+    var sVersB = useState(emptyVersicherung()); var versicherungenB = sVersB[0]; var setVersicherungenB = sVersB[1];
+    var sSparB = useState(emptySparen()); var sparenB = sSparB[0]; var setSparenB = sSparB[1];
     /* Vollmacht */
     var sVoll = useState(false); var vollmachtChecked = sVoll[0]; var setVollmachtChecked = sVoll[1];
     var sSig = useState(null); var signature = sSig[0]; var setSignature = sSig[1];
@@ -288,26 +292,59 @@
     function updateForm(k, v) { setForm(function (prev) { var n = assign({}, prev); n[k] = v; return n; }); }
     function updateCost(id, v) { setCosts(function (prev) { var n = assign({}, prev); n[id] = v; return n; }); }
     function updateEinstieg(k, v) { setEinstieg(function (prev) { var n = assign({}, prev); n[k] = v; return n; }); }
-    function updateVers(sid, key, v) {
-      setVersicherungen(function (prev) { var n = assign({}, prev); n[sid] = assign({}, n[sid]); n[sid][key] = v; return n; });
+    function updateVers(setter, sid, idx, key, v) {
+      setter(function (prev) {
+        var n = assign({}, prev);
+        n[sid] = prev[sid].map(function (x, i) { if (i === idx) { var c = assign({}, x); c[key] = v; return c; } return x; });
+        return n;
+      });
     }
-    function updateSparen(k, v) { setSparen(function (prev) { var n = assign({}, prev); n[k] = v; return n; }); }
-    function updateFonds(idx, key, v) {
-      setSparen(function (prev) { var n = assign({}, prev); var f = prev.fonds.map(function (x) { return assign({}, x); }); f[idx][key] = v; n.fonds = f; return n; });
+    function addVersEintrag(setter, sid) {
+      setter(function (prev) { var n = assign({}, prev); n[sid] = prev[sid].concat([emptyVersEintrag()]); return n; });
     }
-    function addFonds() { setSparen(function (prev) { var n = assign({}, prev); n.fonds = prev.fonds.concat([emptyFonds()]); return n; }); }
-    function removeFonds(idx) { setSparen(function (prev) { var n = assign({}, prev); n.fonds = prev.fonds.filter(function (_, i) { return i !== idx; }); return n; }); }
+    function removeVersEintrag(setter, sid, idx) {
+      setter(function (prev) { var n = assign({}, prev); n[sid] = prev[sid].filter(function (_, i) { return i !== idx; }); return n; });
+    }
+    function updateSparenArr(setter, cat, idx, key, v) {
+      setter(function (prev) {
+        var n = assign({}, prev);
+        n[cat] = prev[cat].map(function (x, i) { if (i === idx) { var c = assign({}, x); c[key] = v; return c; } return x; });
+        return n;
+      });
+    }
+    function addSparenEintrag(setter, cat, template) {
+      setter(function (prev) { var n = assign({}, prev); n[cat] = prev[cat].concat([template]); return n; });
+    }
+    function removeSparenEintrag(setter, cat, idx) {
+      setter(function (prev) { var n = assign({}, prev); n[cat] = prev[cat].filter(function (_, i) { return i !== idx; }); return n; });
+    }
+    function updateFondsEntry(setter, idx, key, v) {
+      setter(function (prev) { var n = assign({}, prev); var f = prev.fonds.map(function (x) { return assign({}, x); }); f[idx][key] = v; n.fonds = f; return n; });
+    }
+    function addFondsEntry(setter) { setter(function (prev) { var n = assign({}, prev); n.fonds = prev.fonds.concat([emptyFonds()]); return n; }); }
+    function removeFondsEntry(setter, idx) { setter(function (prev) { var n = assign({}, prev); n.fonds = prev.fonds.filter(function (_, i) { return i !== idx; }); return n; }); }
     function addKind() { setKinder(function (prev) { return prev.concat([emptyKind()]); }); }
     function removeKind(idx) { setKinder(function (prev) { return prev.filter(function (_, i) { return i !== idx; }); }); }
     function updateKind(idx, data) { setKinder(function (prev) { return prev.map(function (k, i) { return i === idx ? data : k; }); }); }
 
     /* Berechnungen */
     function getSimpleCatTotal(cat) { return cat.fields.reduce(function (s, f) { return s + (parseFloat(costs[f.id]) || 0); }, 0); }
-    function getVersicherungenTotal() { var t = 0; VERSICHERUNG_SPARTEN.forEach(function (s) { t += (parseFloat(versicherungen[s.id].betrag) || 0); }); return t; }
-    function getSparenTotal() {
-      var t = (parseFloat(sparen.sparMonatlich) || 0) + (parseFloat(sparen.bausparerMonatlich) || 0) + (parseFloat(sparen.lvMonatlich) || 0) + (parseFloat(sparen.goldMonatlich) || 0);
-      sparen.fonds.forEach(function (f) { t += (parseFloat(f.monatlich) || 0); }); return t;
+    function sparenSumme(sp) {
+      var t = 0;
+      sp.sparkonten.forEach(function (e) { t += (parseFloat(e.monatlich) || 0); });
+      sp.bausparer.forEach(function (e) { t += (parseFloat(e.monatlich) || 0); });
+      sp.lebensversicherungen.forEach(function (e) { t += (parseFloat(e.monatlich) || 0); });
+      sp.gold.forEach(function (e) { t += (parseFloat(e.monatlich) || 0); });
+      sp.fonds.forEach(function (f) { t += (parseFloat(f.monatlich) || 0); });
+      return t;
     }
+    function versSumme(vs) {
+      var t = 0;
+      VERSICHERUNG_SPARTEN.forEach(function (s) { vs[s.id].forEach(function (e) { t += (parseFloat(e.betrag) || 0); }); });
+      return t;
+    }
+    function getVersicherungenTotal() { return versSumme(versicherungen) + (zweiPersonen ? versSumme(versicherungenB) : 0); }
+    function getSparenTotal() { return sparenSumme(sparen) + (zweiPersonen ? sparenSumme(sparenB) : 0); }
     function getCategoryTotal(cat) {
       if (cat.type === "versicherung") return getVersicherungenTotal();
       if (cat.type === "sparen") return getSparenTotal();
@@ -345,8 +382,14 @@
 
     function getGesellschaften() {
       var set = {};
-      VERSICHERUNG_SPARTEN.forEach(function (s) { var g = (versicherungen[s.id].gesellschaft || "").trim(); if (g) set[g] = true; });
-      var lv = (sparen.lvGesellschaft || "").trim(); if (lv) set[lv] = true;
+      function collectVers(vs) {
+        VERSICHERUNG_SPARTEN.forEach(function (s) { vs[s.id].forEach(function (e) { var g = (e.gesellschaft || "").trim(); if (g) set[g] = true; }); });
+      }
+      function collectSparen(sp) {
+        sp.lebensversicherungen.forEach(function (e) { var g = (e.gesellschaft || "").trim(); if (g) set[g] = true; });
+      }
+      collectVers(versicherungen); collectSparen(sparen);
+      if (zweiPersonen) { collectVers(versicherungenB); collectSparen(sparenB); }
       return Object.keys(set);
     }
 
@@ -355,14 +398,13 @@
       { title: "Willkommen", sub: "Dein pers\u00f6nlicher Finanz-Quickcheck" },
       { title: "Deine Kontaktdaten", sub: "Damit wir dich bestm\u00f6glich beraten k\u00f6nnen" },
       { title: "1. Aktuelle Themen", sub: "Welche Themen besch\u00e4ftigen dich aktuell oder in naher Zukunft?" },
-      { title: "2. Priorit\u00e4ten", sub: "Bitte w\u00e4hle maximal 3 Hauptpriorit\u00e4ten" },
+      { title: "2. Priorit\u00e4ten zum Thema Konzept", sub: "Bitte w\u00e4hle deine Hauptpriorit\u00e4ten" },
       { title: "3. Wohnen & Immobilie", sub: "Trifft aktuell oder zuk\u00fcnftig zu?" },
       { title: "4. Familie & Zukunft", sub: "Was trifft auf dich zu?" },
       { title: "5. Pension & langfristige Ziele", sub: "Wie f\u00fchlst du dich beim Thema Pension?" },
       { title: "6. Absicherung", sub: "Welche Bereiche m\u00f6chtest du abgesichert wissen?" },
       { title: "7. Investment & Verm\u00f6gensaufbau", sub: "Deine Einstellung zu Risiko und Zeithorizont" },
       { title: "8. Erfahrung & Erwartungen", sub: "Deine bisherigen Erfahrungen" },
-      { title: "9. Die wichtigste Frage", sub: "Nimm dir einen Moment Zeit" },
       { title: "Haushaltskosten-Check", sub: "Monatliche Ausgaben je Bereich" },
       { title: "Dein Ergebnis", sub: "Analyse deiner Haushaltskosten" },
       { title: "Vollmacht & Absenden", sub: "Letzte Schritte" },
@@ -371,7 +413,6 @@
 
     function canNext() {
       if (step === 1) return personA.name.trim().length > 0;
-      if (step === 10) return form.wichtigsteFrage.trim().length > 0;
       return true;
     }
 
@@ -385,7 +426,8 @@
         kontakt: { name: personA.name, email: personA.email, telefon: personA.telefon },
         quickcheck: form, einkommen: (parseFloat(einkommenA) || 0) + (zweiPersonen ? (parseFloat(einkommenB) || 0) : 0),
         einkommenA: parseFloat(einkommenA) || 0, einkommenB: zweiPersonen ? (parseFloat(einkommenB) || 0) : null,
-        kosten: costs, versicherungen: versicherungen, sparen: sparen,
+        kosten: costs, versicherungen: versicherungen, versicherungenB: zweiPersonen ? versicherungenB : null,
+        sparen: sparen, sparenB: zweiPersonen ? sparenB : null,
         kategorien: CATEGORIES.map(function (cat) {
           return { name: cat.label, betrag: getCategoryTotal(cat), prozent: totalCosts > 0 ? Math.round((getCategoryTotal(cat) / totalCosts) * 100) : 0, optimal: cat.optimal };
         }),
@@ -433,12 +475,106 @@
           h("input", { style: assign({}, inpSm, { paddingLeft: 22 }), type: "number", value: value, onChange: function (e) { onChange(e.target.value); }, placeholder: "0" }),
           h("span", { style: { position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "#bbb", fontSize: 11 } }, "\u20AC") ));
     }
-    function sparBlock(title, mKey, kKey) {
+    function renderSparenSection(sp, setter, label) {
+      return h("div", { style: { marginBottom: 22 } },
+        h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 } },
+          h("span", { style: { fontSize: 18 } }, "\u{1F3AF}"), h("span", { style: { fontWeight: 600, color: TEXT } }, "Sparen / Investment" + (label ? " \u2013 " + label : "")),
+          h("span", { style: { fontSize: 12, color: "#999", marginLeft: "auto" } }, "Optimal: 30%") ),
+        h("div", { style: { paddingLeft: 26 } },
+          /* Girokonto */
+          renderMultiBlock("Girokonto", sp.girokonten, setter, "girokonten", { kontostand: "", bank: "" }, function (e, idx) {
+            return h("div", { key: idx, style: { display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, marginBottom: 6, alignItems: "end" } },
+              euroField("Kontostand", e.kontostand, function (v) { updateSparenArr(setter, "girokonten", idx, "kontostand", v); }),
+              h("label", { style: { fontSize: 12, color: TEXT } }, "Bank",
+                h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: e.bank, onChange: function (ev) { updateSparenArr(setter, "girokonten", idx, "bank", ev.target.value); }, placeholder: "Bankname" }) ),
+              sp.girokonten.length > 1 ? h("button", { type: "button", onClick: function () { removeSparenEintrag(setter, "girokonten", idx); },
+                style: { background: "none", border: "none", color: "#d44", cursor: "pointer", fontSize: 16, padding: "6px", marginBottom: 2 } }, "\u00d7") : null );
+          }),
+          /* Sparkonto */
+          renderMultiBlock("Sparkonto", sp.sparkonten, setter, "sparkonten", { monatlich: "", kontostand: "" }, function (e, idx) {
+            return h("div", { key: idx, style: { display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, marginBottom: 6, alignItems: "end" } },
+              euroField("Mtl. Sparrate", e.monatlich, function (v) { updateSparenArr(setter, "sparkonten", idx, "monatlich", v); }),
+              euroField("Kontostand", e.kontostand, function (v) { updateSparenArr(setter, "sparkonten", idx, "kontostand", v); }),
+              sp.sparkonten.length > 1 ? h("button", { type: "button", onClick: function () { removeSparenEintrag(setter, "sparkonten", idx); },
+                style: { background: "none", border: "none", color: "#d44", cursor: "pointer", fontSize: 16, padding: "6px", marginBottom: 2 } }, "\u00d7") : null );
+          }),
+          /* Bausparer */
+          renderMultiBlock("Bausparer", sp.bausparer, setter, "bausparer", { monatlich: "", kontostand: "" }, function (e, idx) {
+            return h("div", { key: idx, style: { display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, marginBottom: 6, alignItems: "end" } },
+              euroField("Mtl. Sparrate", e.monatlich, function (v) { updateSparenArr(setter, "bausparer", idx, "monatlich", v); }),
+              euroField("Kontostand", e.kontostand, function (v) { updateSparenArr(setter, "bausparer", idx, "kontostand", v); }),
+              sp.bausparer.length > 1 ? h("button", { type: "button", onClick: function () { removeSparenEintrag(setter, "bausparer", idx); },
+                style: { background: "none", border: "none", color: "#d44", cursor: "pointer", fontSize: 16, padding: "6px", marginBottom: 2 } }, "\u00d7") : null );
+          }),
+          /* Fonds / ETF */
+          h("div", { style: { marginBottom: 12, padding: "10px 12px", background: "#fafafa", borderRadius: R, border: "1px solid #eee" } },
+            h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
+              h("span", { style: { fontSize: 13, fontWeight: 600, color: TEXT } }, "Fonds / ETF"),
+              h("button", { type: "button", onClick: function () { addFondsEntry(setter); },
+                style: { padding: "3px 10px", borderRadius: R, fontSize: 12, fontWeight: 600, fontFamily: "inherit", border: "none", background: GOLD, color: TEXT, cursor: "pointer" } }, "+ Fonds") ),
+            sp.fonds.length === 0 && h("div", { style: { fontSize: 12, color: "#999", padding: "4px 0" } }, "Noch keine Fonds angelegt."),
+            sp.fonds.map(function (f, idx) {
+              return h("div", { key: idx, style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 6, marginBottom: 6, alignItems: "end" } },
+                h("label", { style: { fontSize: 12, color: TEXT } }, "Name",
+                  h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: f.name, onChange: function (e) { updateFondsEntry(setter, idx, "name", e.target.value); }, placeholder: "Fondsname" }) ),
+                h("label", { style: { fontSize: 12, color: TEXT } }, "ISIN",
+                  h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: f.isin, onChange: function (e) { updateFondsEntry(setter, idx, "isin", e.target.value); }, placeholder: "ISIN" }) ),
+                euroField("Mtl. Sparrate", f.monatlich, function (v) { updateFondsEntry(setter, idx, "monatlich", v); }),
+                euroField("Kontostand", f.kontostand, function (v) { updateFondsEntry(setter, idx, "kontostand", v); }),
+                h("button", { type: "button", onClick: function () { removeFondsEntry(setter, idx); },
+                  style: { background: "none", border: "none", color: "#d44", cursor: "pointer", fontSize: 16, padding: "6px", marginBottom: 2 } }, "\u00d7") );
+            }) ),
+          /* Lebensversicherung */
+          renderMultiBlock("Lebensversicherung", sp.lebensversicherungen, setter, "lebensversicherungen", { monatlich: "", gesellschaft: "" }, function (e, idx) {
+            return h("div", { key: idx, style: { display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, marginBottom: 6, alignItems: "end" } },
+              euroField("Mtl. Sparrate", e.monatlich, function (v) { updateSparenArr(setter, "lebensversicherungen", idx, "monatlich", v); }),
+              h("label", { style: { fontSize: 12, color: TEXT } }, "Gesellschaft",
+                h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: e.gesellschaft, onChange: function (ev) { updateSparenArr(setter, "lebensversicherungen", idx, "gesellschaft", ev.target.value); }, placeholder: "Versicherung" }) ),
+              sp.lebensversicherungen.length > 1 ? h("button", { type: "button", onClick: function () { removeSparenEintrag(setter, "lebensversicherungen", idx); },
+                style: { background: "none", border: "none", color: "#d44", cursor: "pointer", fontSize: 16, padding: "6px", marginBottom: 2 } }, "\u00d7") : null );
+          }),
+          /* Gold / Sonstiges */
+          renderMultiBlock("Gold / Sonstiges", sp.gold, setter, "gold", { monatlich: "", kontostand: "" }, function (e, idx) {
+            return h("div", { key: idx, style: { display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, marginBottom: 6, alignItems: "end" } },
+              euroField("Mtl. Sparrate", e.monatlich, function (v) { updateSparenArr(setter, "gold", idx, "monatlich", v); }),
+              euroField("Kontostand", e.kontostand, function (v) { updateSparenArr(setter, "gold", idx, "kontostand", v); }),
+              sp.gold.length > 1 ? h("button", { type: "button", onClick: function () { removeSparenEintrag(setter, "gold", idx); },
+                style: { background: "none", border: "none", color: "#d44", cursor: "pointer", fontSize: 16, padding: "6px", marginBottom: 2 } }, "\u00d7") : null );
+          }) ) );
+    }
+    function renderMultiBlock(title, items, setter, cat, template, renderItem) {
       return h("div", { style: { marginBottom: 12, padding: "10px 12px", background: "#fafafa", borderRadius: R, border: "1px solid #eee" } },
-        h("div", { style: { fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 6 } }, title),
-        h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } },
-          euroField("Mtl. Sparrate", sparen[mKey], function (v) { updateSparen(mKey, v); }),
-          euroField("Kontostand", sparen[kKey], function (v) { updateSparen(kKey, v); }) ));
+        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
+          h("span", { style: { fontSize: 13, fontWeight: 600, color: TEXT } }, title),
+          h("button", { type: "button", onClick: function () { addSparenEintrag(setter, cat, template); },
+            style: { padding: "3px 10px", borderRadius: R, fontSize: 12, fontWeight: 600, fontFamily: "inherit", border: "none", background: GOLD, color: TEXT, cursor: "pointer" } }, "+") ),
+        items.map(renderItem) );
+    }
+    function renderVersSection(vs, setter, label) {
+      return h("div", { style: { marginBottom: 14 } },
+        h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 } },
+          h("span", { style: { fontSize: 18 } }, "\u{1F6E1}\uFE0F"), h("span", { style: { fontWeight: 600, color: TEXT } }, "Versicherungen" + (label ? " \u2013 " + label : "")),
+          h("span", { style: { fontSize: 12, color: "#999", marginLeft: "auto" } }, "Optimal: 10%") ),
+        h("div", { style: { paddingLeft: 26 } },
+          VERSICHERUNG_SPARTEN.map(function (sp) {
+            return h("div", { key: sp.id, style: { marginBottom: 10, padding: "10px 12px", background: "#fafafa", borderRadius: R, border: "1px solid #eee" } },
+              h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
+                h("span", { style: { fontSize: 13, fontWeight: 600, color: TEXT } }, sp.label),
+                h("button", { type: "button", onClick: function () { addVersEintrag(setter, sp.id); },
+                  style: { padding: "3px 10px", borderRadius: R, fontSize: 12, fontWeight: 600, fontFamily: "inherit", border: "none", background: GOLD, color: TEXT, cursor: "pointer" } }, "+") ),
+              vs[sp.id].map(function (v, idx) {
+                return h("div", { key: idx, style: { display: "grid", gridTemplateColumns: sp.hasQm || sp.hasBm ? "1fr 1fr 1fr auto" : "1fr 1fr auto", gap: 8, marginBottom: 6, alignItems: "end" } },
+                  euroField("Monatl. Pr\u00e4mie", v.betrag, function (val) { updateVers(setter, sp.id, idx, "betrag", val); }),
+                  h("label", { style: { fontSize: 12, color: TEXT } }, "Gesellschaft",
+                    h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: v.gesellschaft, onChange: function (e) { updateVers(setter, sp.id, idx, "gesellschaft", e.target.value); }, placeholder: "Versicherung" }) ),
+                  sp.hasQm && h("label", { style: { fontSize: 12, color: TEXT } }, "m\u00b2",
+                    h("input", { style: assign({}, inpSm, { marginTop: 2 }), type: "number", value: v.qm, onChange: function (e) { updateVers(setter, sp.id, idx, "qm", e.target.value); }, placeholder: "m\u00b2" }) ),
+                  sp.hasBm && h("label", { style: { fontSize: 12, color: TEXT } }, "BM-Stufe",
+                    h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: v.bmstufe, onChange: function (e) { updateVers(setter, sp.id, idx, "bmstufe", e.target.value); }, placeholder: "z.B. 0" }) ),
+                  vs[sp.id].length > 1 ? h("button", { type: "button", onClick: function () { removeVersEintrag(setter, sp.id, idx); },
+                    style: { background: "none", border: "none", color: "#d44", cursor: "pointer", fontSize: 16, padding: "6px", marginBottom: 2 } }, "\u00d7") : null );
+              }) );
+          }) ) );
     }
 
     /* ══════════ STEP RENDERER ══════════ */
@@ -496,18 +632,20 @@
         /* 2: Themen */
         case 2:
           return h("div", null,
-            h(CheckGroup, { options: ["Haus bauen","Wohnung kaufen","Miete / Wohnen optimieren","Umschuldung / Finanzierung pr\u00fcfen","F\u00f6rderungen nutzen","Verm\u00f6gensaufbau","Pension / Altersvorsorge","Absicherung Familie","Absicherung Einkommen","Investment / Geldanlage","Privatversicherung / Gesundheit","Einkommenssituation verbessern","R\u00fccklagen aufbauen","Reisen & Lebensqualit\u00e4t","Sonstiges"], selected: form.themen, onChange: function (v) { updateForm("themen", v); } }),
+            h(CheckGroup, { options: ["Immobilie","Miete / Wohnen optimieren","Umschuldung / Finanzierung pr\u00fcfen","F\u00f6rderungen nutzen","Verm\u00f6gensaufbau","Pension / Altersvorsorge","Absicherung Familie","Absicherung Einkommen","Privatversicherung / Gesundheit","Einkommenssituation verbessern","R\u00fccklagen aufbauen","Sonstiges"], selected: form.themen, onChange: function (v) { updateForm("themen", v); } }),
             form.themen.includes("Sonstiges") && h("input", { style: assign({}, inp, { marginTop: 12 }), value: form.themenSonstig, onChange: function (e) { updateForm("themenSonstig", e.target.value); }, placeholder: "Bitte beschreiben\u2026" }) );
 
         /* 3: Priorit\u00e4ten */
         case 3:
           return h("div", null,
-            form.prioritaeten.length >= 3 && h("div", { style: { fontSize: 13, color: GOLD_DARK, marginBottom: 8 } }, "Maximum von 3 erreicht"),
-            h(CheckGroup, { max: 3, options: ["Sicherheit","Wachstum / Rendite","Flexibilit\u00e4t","Planbarkeit","Steuerliche Vorteile","F\u00f6rderung nutzen","Langfristiger Verm\u00f6gensaufbau","Kurzfristige Liquidit\u00e4t","Absicherung","Unabh\u00e4ngigkeit"], selected: form.prioritaeten, onChange: function (v) { updateForm("prioritaeten", v); } }) );
+            h(CheckGroup, { options: ["Sicherheit","Flexibilit\u00e4t","Steueroptimierung","Transparenz","Gewinnorientiert"], selected: form.prioritaeten, onChange: function (v) { updateForm("prioritaeten", v); } }) );
 
         /* 4: Wohnen */
         case 4:
-          return h(CheckGroup, { options: ["Kein Thema","Haus bauen","Wohnung kaufen","Sanieren / Umbauen","Bestehende Finanzierung optimieren"], selected: form.wohnen, onChange: function (v) { updateForm("wohnen", v); } });
+          return h("div", null,
+            h(CheckGroup, { options: ["Kein Thema","Haus bauen","Wohnung kaufen","Sanieren / Umbauen","Bestehende Finanzierung optimieren"], selected: form.wohnen, onChange: function (v) { updateForm("wohnen", v); } }),
+            h("label", { style: { display: "block", marginTop: 16, fontSize: 14, color: "#555" } }, "Notizen",
+              h("textarea", { style: assign({}, ta, { marginTop: 6 }), value: form.wohnenNotizen || "", onChange: function (e) { updateForm("wohnenNotizen", e.target.value); }, placeholder: "Eigene Notizen zum Thema Wohnen & Immobilie\u2026" }) ) );
 
         /* 5: Familie */
         case 5:
@@ -516,7 +654,7 @@
         /* 6: Pension (erweitert) */
         case 6:
           return h("div", null,
-            h(RadioGroup, { options: ["Sehr entspannt","Eher entspannt","Unsicher","Sorgevoll"], selected: form.pensionGefuehl, onChange: function (v) { updateForm("pensionGefuehl", v); } }),
+            h(RadioGroup, { options: ["Entspannt","Unsicher","Sorgevoll"], selected: form.pensionGefuehl, onChange: function (v) { updateForm("pensionGefuehl", v); } }),
             secTitle("Wie hoch muss deine Pension sein und wann willst du in Pension gehen?"),
             h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 } },
               h("label", { style: { fontWeight: 500, fontSize: 14, color: TEXT } }, "Gew\u00fcnschte Pensionsh\u00f6he (\u20AC mtl.)",
@@ -548,19 +686,8 @@
             secTitle("Was ist dir in der Beratung besonders wichtig?"),
             h(CheckGroup, { options: ["Verst\u00e4ndliche Erkl\u00e4rungen","Transparenz","Langfristige Begleitung","Sicherheit","Unabh\u00e4ngigkeit","Vergleichsm\u00f6glichkeiten"], selected: form.beratungWichtig, onChange: function (v) { updateForm("beratungWichtig", v); } }) );
 
-        /* 10: Wichtigste Frage + Abschlussfrage (zusammengefasst) */
+        /* 10: Haushaltskosten (komplett neu) */
         case 10:
-          return h("div", null,
-            h("div", { style: { background: "#fdf8e8", borderLeft: "3px solid " + GOLD_DARK, padding: "10px 14px", borderRadius: "0 " + R + "px " + R + "px 0", marginBottom: 14, fontSize: 14, color: "#666" } }, "Pflichtfeld \u2013 nimm dir einen Moment Zeit."),
-            h("label", { style: { display: "block", marginBottom: 16, fontSize: 14, color: "#555" } },
-              "Was ist dir pers\u00f6nlich beim Thema Finanzen am wichtigsten?",
-              h("textarea", { style: assign({}, ta, { marginTop: 6 }), value: form.wichtigsteFrage, onChange: function (e) { updateForm("wichtigsteFrage", e.target.value); }, placeholder: "Was ist dir pers\u00f6nlich beim Thema Finanzen am wichtigsten?" }) ),
-            h("label", { style: { display: "block", fontSize: 14, color: "#555" } },
-              "Was darf in einem Finanzkonzept f\u00fcr dich auf keinen Fall fehlen?",
-              h("textarea", { style: assign({}, ta, { marginTop: 6 }), value: form.abschlussfrage, onChange: function (e) { updateForm("abschlussfrage", e.target.value); }, placeholder: "Was darf in einem Finanzkonzept f\u00fcr dich auf keinen Fall fehlen?" }) ) );
-
-        /* 11: Haushaltskosten (komplett neu) */
-        case 11:
           return h("div", null,
             zweiPersonen
               ? h("div", { style: { marginBottom: 18 } },
@@ -582,66 +709,15 @@
                     h("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#999" } }, "\u20AC") ) ),
             renderSimpleCat(CATEGORIES[0]),
             renderSimpleCat(CATEGORIES[1]),
-            /* Sparen / Investment */
-            h("div", { style: { marginBottom: 22 } },
-              h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 } },
-                h("span", { style: { fontSize: 18 } }, "\u{1F3AF}"), h("span", { style: { fontWeight: 600, color: TEXT } }, "Sparen / Investment"),
-                h("span", { style: { fontSize: 12, color: "#999", marginLeft: "auto" } }, "Optimal: 30%") ),
-              h("div", { style: { paddingLeft: 26 } },
-                h("div", { style: { marginBottom: 12, padding: "10px 12px", background: "#fafafa", borderRadius: R, border: "1px solid #eee" } },
-                  h("div", { style: { fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 6 } }, "Girokonto"),
-                  h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } },
-                    euroField("Kontostand", sparen.giroKontostand, function (v) { updateSparen("giroKontostand", v); }),
-                    h("label", { style: { fontSize: 12, color: TEXT } }, "Bank",
-                      h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: sparen.giroBank, onChange: function (e) { updateSparen("giroBank", e.target.value); }, placeholder: "Bankname" }) ) ) ),
-                sparBlock("Sparkonto", "sparMonatlich", "sparKontostand"),
-                sparBlock("Bausparer", "bausparerMonatlich", "bausparerKontostand"),
-                h("div", { style: { marginBottom: 12, padding: "10px 12px", background: "#fafafa", borderRadius: R, border: "1px solid #eee" } },
-                  h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
-                    h("span", { style: { fontSize: 13, fontWeight: 600, color: TEXT } }, "Fonds / ETF"),
-                    h("button", { type: "button", onClick: addFonds,
-                      style: { padding: "3px 10px", borderRadius: R, fontSize: 12, fontWeight: 600, fontFamily: "inherit", border: "none", background: GOLD, color: TEXT, cursor: "pointer" } }, "+ Fonds") ),
-                  sparen.fonds.length === 0 && h("div", { style: { fontSize: 12, color: "#999", padding: "4px 0" } }, "Noch keine Fonds angelegt."),
-                  sparen.fonds.map(function (f, idx) {
-                    return h("div", { key: idx, style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 6, marginBottom: 6, alignItems: "end" } },
-                      h("label", { style: { fontSize: 12, color: TEXT } }, "Name",
-                        h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: f.name, onChange: function (e) { updateFonds(idx, "name", e.target.value); }, placeholder: "Fondsname" }) ),
-                      h("label", { style: { fontSize: 12, color: TEXT } }, "ISIN",
-                        h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: f.isin, onChange: function (e) { updateFonds(idx, "isin", e.target.value); }, placeholder: "ISIN" }) ),
-                      euroField("Mtl. Sparrate", f.monatlich, function (v) { updateFonds(idx, "monatlich", v); }),
-                      euroField("Kontostand", f.kontostand, function (v) { updateFonds(idx, "kontostand", v); }),
-                      h("button", { type: "button", onClick: function () { removeFonds(idx); },
-                        style: { background: "none", border: "none", color: "#d44", cursor: "pointer", fontSize: 16, padding: "6px", marginBottom: 2 } }, "\u00d7") );
-                  }) ),
-                h("div", { style: { marginBottom: 12, padding: "10px 12px", background: "#fafafa", borderRadius: R, border: "1px solid #eee" } },
-                  h("div", { style: { fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 6 } }, "Lebensversicherung"),
-                  h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } },
-                    euroField("Mtl. Sparrate", sparen.lvMonatlich, function (v) { updateSparen("lvMonatlich", v); }),
-                    h("label", { style: { fontSize: 12, color: TEXT } }, "Gesellschaft",
-                      h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: sparen.lvGesellschaft, onChange: function (e) { updateSparen("lvGesellschaft", e.target.value); }, placeholder: "Versicherung" }) ) ) ),
-                sparBlock("Gold / Sonstiges", "goldMonatlich", "goldKontostand") ) ),
-            /* Versicherungen */
-            h("div", { style: { marginBottom: 14 } },
-              h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 } },
-                h("span", { style: { fontSize: 18 } }, "\u{1F6E1}\uFE0F"), h("span", { style: { fontWeight: 600, color: TEXT } }, "Versicherungen"),
-                h("span", { style: { fontSize: 12, color: "#999", marginLeft: "auto" } }, "Optimal: 10%") ),
-              h("div", { style: { paddingLeft: 26 } },
-                VERSICHERUNG_SPARTEN.map(function (sp) {
-                  var v = versicherungen[sp.id];
-                  return h("div", { key: sp.id, style: { marginBottom: 10, padding: "10px 12px", background: "#fafafa", borderRadius: R, border: "1px solid #eee" } },
-                    h("div", { style: { fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 6 } }, sp.label),
-                    h("div", { style: { display: "grid", gridTemplateColumns: sp.hasQm || sp.hasBm ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8 } },
-                      euroField("Monatl. Pr\u00e4mie", v.betrag, function (val) { updateVers(sp.id, "betrag", val); }),
-                      h("label", { style: { fontSize: 12, color: TEXT } }, "Gesellschaft",
-                        h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: v.gesellschaft, onChange: function (e) { updateVers(sp.id, "gesellschaft", e.target.value); }, placeholder: "Versicherung" }) ),
-                      sp.hasQm && h("label", { style: { fontSize: 12, color: TEXT } }, "m\u00b2",
-                        h("input", { style: assign({}, inpSm, { marginTop: 2 }), type: "number", value: v.qm, onChange: function (e) { updateVers(sp.id, "qm", e.target.value); }, placeholder: "m\u00b2" }) ),
-                      sp.hasBm && h("label", { style: { fontSize: 12, color: TEXT } }, "BM-Stufe",
-                        h("input", { style: assign({}, inpSm, { marginTop: 2 }), value: v.bmstufe, onChange: function (e) { updateVers(sp.id, "bmstufe", e.target.value); }, placeholder: "z.B. 0" }) ) ));
-                }) ) ) );
+            /* Sparen / Investment - Person A (oder einzige Person) */
+            renderSparenSection(sparen, setSparen, zweiPersonen ? (personA.name || "Person A") : ""),
+            zweiPersonen && renderSparenSection(sparenB, setSparenB, personB.name || "Person B"),
+            /* Versicherungen - Person A (oder einzige Person) */
+            renderVersSection(versicherungen, setVersicherungen, zweiPersonen ? (personA.name || "Person A") : ""),
+            zweiPersonen && renderVersSection(versicherungenB, setVersicherungenB, personB.name || "Person B") );
 
-        /* 12: Ergebnis */
-        case 12:
+        /* 11: Ergebnis */
+        case 11:
           var chartData = getChartData(); var einkommenNum = (parseFloat(einkommenA) || 0) + (zweiPersonen ? (parseFloat(einkommenB) || 0) : 0);
           return h("div", null,
             totalCosts === 0
@@ -679,8 +755,8 @@
                         h("div", { style: { fontSize: 13, color: s.cl, marginTop: 4 } }, rec.text) );
                     }) ) ) );
 
-        /* 13: Vollmacht + Absenden */
-        case 13:
+        /* 12: Vollmacht + Absenden */
+        case 12:
           var gesellschaften = getGesellschaften();
           return h("div", null,
             h("div", { style: { background: "#fafafa", borderRadius: R, padding: 18, marginBottom: 18, border: "1px solid #eee" } },
