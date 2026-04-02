@@ -170,10 +170,17 @@ function qc_handle_submit() {
     $kunde_email   = sanitize_email( $payload['kontakt']['email'] ?? '' );
 
     $to      = $partner ? $partner['email'] : get_option( 'admin_email' );
-    $subject = sprintf( 'Neuer Quickcheck von %s', $kunde_name ?: 'Unbekannt' );
     $body    = qc_build_email_body( $payload, $partner );
 
-    $headers = array( 'Content-Type: text/html; charset=UTF-8' );
+    /*
+     * Content-Type per Filter statt per Header setzen.
+     * Manueller Header erzeugt Duplikate wenn FluentSMTP / PHPMailer
+     * den Content-Type eigenständig setzt → securemail.pro 422.
+     */
+    $qc_set_html = function() { return 'text/html'; };
+    add_filter( 'wp_mail_content_type', $qc_set_html );
+
+    $headers = array();
     if ( $kunde_email ) {
         /*
          * Reply-To: nur E-Mail-Adresse, KEIN RFC 2047-kodierter Name.
@@ -184,15 +191,28 @@ function qc_handle_submit() {
         $headers[] = 'Reply-To: ' . $kunde_email;
     }
 
+    /*
+     * Subject: nur ASCII-sichere Zeichen.
+     * PHPMailer kodiert den Betreff selbst (RFC 2047) – wenn FluentSMTP
+     * nochmals kodiert, entsteht wieder Doppelkodierung.
+     * Wir entfernen manuell alle Nicht-ASCII-Zeichen und ersetzen sie
+     * durch sichere Transliterationen (ä→ae usw.).
+     */
+    $safe_name = qc_transliterate( $kunde_name ?: 'Unbekannt' );
+    $subject   = 'Neuer Quickcheck von ' . $safe_name;
+
     /* Debug: log mail errors + headers (nach Stabilisierung entfernen) */
     $mail_error = '';
     add_action( 'wp_mail_failed', function( $wp_error ) use ( &$mail_error ) {
         $mail_error = $wp_error->get_error_message();
     });
 
-    error_log( 'QC Mail → To: ' . $to . ' | Headers: ' . wp_json_encode( $headers ) . ' | Body: ' . strlen( $body ) . ' Bytes' );
+    error_log( 'QC Mail → To: ' . $to . ' | Subject: ' . $subject . ' | Headers: ' . wp_json_encode( $headers ) . ' | Body: ' . strlen( $body ) . ' Bytes' );
 
     $sent = wp_mail( $to, $subject, $body, $headers );
+
+    /* Filter sofort entfernen um andere Mails nicht zu beeinflussen */
+    remove_filter( 'wp_mail_content_type', $qc_set_html );
 
     if ( ! $sent && $mail_error ) {
         error_log( 'QC Mail Error: ' . $mail_error );
@@ -202,7 +222,10 @@ function qc_handle_submit() {
     if ( get_option( 'qc_send_admin_copy', false ) ) {
         $admin_email = get_option( 'admin_email' );
         if ( $to !== $admin_email ) {
-            wp_mail( $admin_email, '[Kopie] ' . $subject, $body, $headers );
+            /* Kopie ohne Reply-To (Admin soll nicht an Kunden antworten) */
+            add_filter( 'wp_mail_content_type', $qc_set_html );
+            wp_mail( $admin_email, '[Kopie] ' . $subject, $body );
+            remove_filter( 'wp_mail_content_type', $qc_set_html );
         }
     }
 
@@ -215,6 +238,23 @@ function qc_handle_submit() {
         }
         wp_send_json_error( $msg, 500 );
     }
+}
+
+/* ── Helper: Deutsche Sonderzeichen → ASCII (für Header) ── */
+function qc_transliterate( $str ) {
+    $map = array(
+        'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss',
+        'Ä' => 'Ae', 'Ö' => 'Oe', 'Ü' => 'Ue',
+        'é' => 'e',  'è' => 'e',  'ê' => 'e',  'á' => 'a',
+        'à' => 'a',  'â' => 'a',  'ó' => 'o',  'ò' => 'o',
+        'ô' => 'o',  'ú' => 'u',  'ù' => 'u',  'û' => 'u',
+        'í' => 'i',  'ì' => 'i',  'î' => 'i',  'ñ' => 'n',
+        'ç' => 'c',  'ć' => 'c',  'č' => 'c',  'ž' => 'z',
+        'š' => 's',  'đ' => 'd',
+    );
+    $str = strtr( $str, $map );
+    // Verbleibende Nicht-ASCII-Zeichen entfernen
+    return preg_replace( '/[^\x20-\x7E]/', '', $str );
 }
 
 /* ── Helper: Person-Tabelle für E-Mail ── */
