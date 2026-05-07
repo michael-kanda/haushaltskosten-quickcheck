@@ -282,22 +282,233 @@ function qc_render_person_table( $person, $title ) {
     return $html;
 }
 
+/* ── Helper: Kategorie-Felder-Map (für Aufschlüsselung Haushaltskosten) ── */
+function qc_get_kosten_felder_map() {
+    return array(
+        'Wohnkosten' => array(
+            'miete' => 'Miete / Hypothek',
+            'instandhaltung' => 'Instandhaltung',
+            'strom' => 'Strom',
+            'gas' => 'Gas',
+            'wasser' => 'Wasser',
+        ),
+        'Konsum / Fixkosten' => array(
+            'lebensmittel' => 'Lebensmittel',
+            'kleidung' => 'Kleidung',
+            'kommunikation' => 'Kommunikation (Internet, Handy)',
+            'abos' => 'Abos',
+            'leasing' => 'Leasing / Kredit',
+            'kfz' => 'KFZ',
+            'haustiere' => 'Haustiere',
+            'zigaretten' => 'Zigaretten',
+            'geschenke' => 'Geschenke',
+            'kinderbetreuung' => 'Kinder / Betreuung',
+            'freizeit' => 'Freizeit / Hobbys',
+            'urlaub' => 'Urlaub',
+            'restaurant' => 'Restaurantbesuche',
+        ),
+    );
+}
+
+/* ── Helper: Versicherungs-Sparten Labels ── */
+function qc_get_vers_labels() {
+    return array(
+        'eigenheim' => 'Eigenheim',
+        'haushalt' => 'Haushalt',
+        'haftpflicht' => 'Haftpflicht',
+        'rechtsschutz' => 'Rechtsschutz',
+        'unfall' => 'Unfall',
+        'kranken' => 'Kranken',
+        'berufsunfaehigkeit' => 'BU',
+        'kfzvers' => 'KFZ',
+        'ableben' => 'Ableben',
+        'sonstige' => 'Sonstige',
+    );
+}
+
+/* ── Helper: Versicherungen einer Person aufschlüsseln (alle Einträge je Sparte) ── */
+function qc_render_versicherungen_table( $vers_data, $titel ) {
+    if ( empty( $vers_data ) || ! is_array( $vers_data ) ) return '';
+
+    $vers_labels = qc_get_vers_labels();
+    $rows        = '';
+    $summe       = 0;
+
+    foreach ( $vers_labels as $key => $label ) {
+        $eintraege = $vers_data[ $key ] ?? array();
+        if ( ! is_array( $eintraege ) ) continue;
+
+        foreach ( $eintraege as $v ) {
+            if ( ! is_array( $v ) ) continue;
+            $betrag       = floatval( $v['betrag'] ?? 0 );
+            $gesellschaft = trim( $v['gesellschaft'] ?? '' );
+            if ( $betrag <= 0 && $gesellschaft === '' ) continue;
+
+            $info = '';
+            if ( ! empty( $v['qm'] ) )      $info = $v['qm'] . ' m²';
+            if ( ! empty( $v['bmstufe'] ) ) $info = 'BM ' . $v['bmstufe'];
+
+            $summe += $betrag;
+            $rows  .= '<tr style="border-bottom:1px solid #f0f0f0;">'
+                    . '<td>' . esc_html( $label ) . '</td>'
+                    . '<td style="text-align:right;">€ ' . number_format( $betrag, 2, ',', '.' ) . '</td>'
+                    . '<td>' . esc_html( $gesellschaft !== '' ? $gesellschaft : '—' ) . '</td>'
+                    . '<td>' . esc_html( $info !== '' ? $info : '—' ) . '</td>'
+                    . '</tr>';
+        }
+    }
+
+    if ( $rows === '' ) return '';
+
+    $html  = '<h2 style="font-size:16px;border-bottom:2px solid #f5d86b;padding-bottom:6px;">' . esc_html( $titel ) . '</h2>';
+    $html .= '<table style="width:100%;font-size:14px;margin-bottom:20px;border-collapse:collapse;" cellpadding="4">';
+    $html .= '<tr style="background:#fdf8e8;"><th style="text-align:left;">Sparte</th><th style="text-align:right;">Prämie (mtl.)</th><th style="text-align:left;">Gesellschaft</th><th style="text-align:left;">Info</th></tr>';
+    $html .= $rows;
+    $html .= '<tr style="background:#fafafa;font-weight:600;"><td>Summe ' . esc_html( $titel ) . '</td><td style="text-align:right;">€ ' . number_format( $summe, 2, ',', '.' ) . '</td><td colspan="2"></td></tr>';
+    $html .= '</table>';
+    return $html;
+}
+
+/* ── Helper: Sparen einer Person aufschlüsseln (alle Einträge je Typ) ── */
+function qc_render_sparen_table( $sparen_data, $titel ) {
+    if ( empty( $sparen_data ) || ! is_array( $sparen_data ) ) return '';
+
+    $rows  = '';
+    $summe_monatlich = 0;
+    $summe_bestand   = 0;
+
+    /* Girokonten */
+    foreach ( (array) ( $sparen_data['girokonten'] ?? array() ) as $g ) {
+        if ( ! is_array( $g ) ) continue;
+        $kontostand = floatval( $g['kontostand'] ?? 0 );
+        $bank       = trim( $g['bank'] ?? '' );
+        if ( $kontostand <= 0 && $bank === '' ) continue;
+        $summe_bestand += $kontostand;
+        $rows .= '<tr style="border-bottom:1px solid #f0f0f0;">'
+               . '<td style="color:#999;">Girokonto</td>'
+               . '<td>' . esc_html( $bank !== '' ? $bank : '—' ) . '</td>'
+               . '<td style="text-align:right;">—</td>'
+               . '<td style="text-align:right;">€ ' . number_format( $kontostand, 2, ',', '.' ) . '</td>'
+               . '</tr>';
+    }
+
+    /* Sparkonten */
+    foreach ( (array) ( $sparen_data['sparkonten'] ?? array() ) as $s ) {
+        if ( ! is_array( $s ) ) continue;
+        $monatlich  = floatval( $s['monatlich']  ?? 0 );
+        $kontostand = floatval( $s['kontostand'] ?? 0 );
+        if ( $monatlich <= 0 && $kontostand <= 0 ) continue;
+        $summe_monatlich += $monatlich;
+        $summe_bestand   += $kontostand;
+        $rows .= '<tr style="border-bottom:1px solid #f0f0f0;">'
+               . '<td style="color:#999;">Sparkonto</td>'
+               . '<td>—</td>'
+               . '<td style="text-align:right;">€ ' . number_format( $monatlich,  2, ',', '.' ) . '</td>'
+               . '<td style="text-align:right;">€ ' . number_format( $kontostand, 2, ',', '.' ) . '</td>'
+               . '</tr>';
+    }
+
+    /* Bausparer */
+    foreach ( (array) ( $sparen_data['bausparer'] ?? array() ) as $b ) {
+        if ( ! is_array( $b ) ) continue;
+        $monatlich  = floatval( $b['monatlich']  ?? 0 );
+        $kontostand = floatval( $b['kontostand'] ?? 0 );
+        if ( $monatlich <= 0 && $kontostand <= 0 ) continue;
+        $summe_monatlich += $monatlich;
+        $summe_bestand   += $kontostand;
+        $rows .= '<tr style="border-bottom:1px solid #f0f0f0;">'
+               . '<td style="color:#999;">Bausparer</td>'
+               . '<td>—</td>'
+               . '<td style="text-align:right;">€ ' . number_format( $monatlich,  2, ',', '.' ) . '</td>'
+               . '<td style="text-align:right;">€ ' . number_format( $kontostand, 2, ',', '.' ) . '</td>'
+               . '</tr>';
+    }
+
+    /* Fonds / ETF */
+    foreach ( (array) ( $sparen_data['fonds'] ?? array() ) as $f ) {
+        if ( ! is_array( $f ) ) continue;
+        $monatlich  = floatval( $f['monatlich']  ?? 0 );
+        $kontostand = floatval( $f['kontostand'] ?? 0 );
+        $name       = trim( $f['name'] ?? '' );
+        $isin       = trim( $f['isin'] ?? '' );
+        if ( $monatlich <= 0 && $kontostand <= 0 && $name === '' && $isin === '' ) continue;
+        $summe_monatlich += $monatlich;
+        $summe_bestand   += $kontostand;
+        $bezeichnung = ( $name !== '' ? $name : '—' ) . ( $isin !== '' ? ' (' . $isin . ')' : '' );
+        $rows .= '<tr style="border-bottom:1px solid #f0f0f0;">'
+               . '<td style="color:#999;">Fonds / ETF</td>'
+               . '<td>' . esc_html( $bezeichnung ) . '</td>'
+               . '<td style="text-align:right;">€ ' . number_format( $monatlich,  2, ',', '.' ) . '</td>'
+               . '<td style="text-align:right;">€ ' . number_format( $kontostand, 2, ',', '.' ) . '</td>'
+               . '</tr>';
+    }
+
+    /* Lebensversicherungen */
+    foreach ( (array) ( $sparen_data['lebensversicherungen'] ?? array() ) as $lv ) {
+        if ( ! is_array( $lv ) ) continue;
+        $monatlich    = floatval( $lv['monatlich'] ?? 0 );
+        $gesellschaft = trim( $lv['gesellschaft'] ?? '' );
+        if ( $monatlich <= 0 && $gesellschaft === '' ) continue;
+        $summe_monatlich += $monatlich;
+        $rows .= '<tr style="border-bottom:1px solid #f0f0f0;">'
+               . '<td style="color:#999;">Lebensversicherung</td>'
+               . '<td>' . esc_html( $gesellschaft !== '' ? $gesellschaft : '—' ) . '</td>'
+               . '<td style="text-align:right;">€ ' . number_format( $monatlich, 2, ',', '.' ) . '</td>'
+               . '<td style="text-align:right;">—</td>'
+               . '</tr>';
+    }
+
+    /* Gold */
+    foreach ( (array) ( $sparen_data['gold'] ?? array() ) as $g ) {
+        if ( ! is_array( $g ) ) continue;
+        $monatlich  = floatval( $g['monatlich']  ?? 0 );
+        $kontostand = floatval( $g['kontostand'] ?? 0 );
+        if ( $monatlich <= 0 && $kontostand <= 0 ) continue;
+        $summe_monatlich += $monatlich;
+        $summe_bestand   += $kontostand;
+        $rows .= '<tr style="border-bottom:1px solid #f0f0f0;">'
+               . '<td style="color:#999;">Gold</td>'
+               . '<td>—</td>'
+               . '<td style="text-align:right;">€ ' . number_format( $monatlich,  2, ',', '.' ) . '</td>'
+               . '<td style="text-align:right;">€ ' . number_format( $kontostand, 2, ',', '.' ) . '</td>'
+               . '</tr>';
+    }
+
+    if ( $rows === '' ) return '';
+
+    $html  = '<h2 style="font-size:16px;border-bottom:2px solid #f5d86b;padding-bottom:6px;">' . esc_html( $titel ) . '</h2>';
+    $html .= '<table style="width:100%;font-size:14px;margin-bottom:20px;border-collapse:collapse;" cellpadding="4">';
+    $html .= '<tr style="background:#fdf8e8;"><th style="text-align:left;">Typ</th><th style="text-align:left;">Bezeichnung / Bank</th><th style="text-align:right;">Mtl. Sparrate</th><th style="text-align:right;">Kontostand</th></tr>';
+    $html .= $rows;
+    $html .= '<tr style="background:#fafafa;font-weight:600;"><td colspan="2">Summe ' . esc_html( $titel ) . '</td><td style="text-align:right;">€ ' . number_format( $summe_monatlich, 2, ',', '.' ) . '</td><td style="text-align:right;">€ ' . number_format( $summe_bestand, 2, ',', '.' ) . '</td></tr>';
+    $html .= '</table>';
+    return $html;
+}
+
 /* ── HTML E-Mail ── */
 function qc_build_email_body( $payload, $partner ) {
-    $kontakt        = $payload['kontakt'] ?? array();
-    $einstieg       = $payload['einstiegsfragen'] ?? array();
-    $personA        = $payload['personA'] ?? array();
-    $personB        = $payload['personB'] ?? null;
-    $kinder         = $payload['kinder'] ?? array();
-    $quickcheck     = $payload['quickcheck'] ?? array();
-    $kategorien     = $payload['kategorien'] ?? array();
-    $versicherungen = $payload['versicherungen'] ?? array();
-    $sparen_data    = $payload['sparen'] ?? array();
-    $gesellschaften = $payload['gesellschaften'] ?? array();
-    $einkommen      = number_format( floatval( $payload['einkommen'] ?? 0 ), 0, ',', '.' );
-    $vollmacht      = ! empty( $payload['vollmacht'] ) ? 'Ja' : 'Nein';
-    $signatur       = ( $payload['signatur'] ?? 'keine' ) === 'vorhanden' ? 'Vorhanden' : 'Keine';
-    $anz_personen   = intval( $payload['kontaktPersonen'] ?? 1 );
+    $kontakt         = $payload['kontakt'] ?? array();
+    $einstieg        = $payload['einstiegsfragen'] ?? array();
+    $personA         = $payload['personA'] ?? array();
+    $personB         = $payload['personB'] ?? null;
+    $kinder          = $payload['kinder'] ?? array();
+    $quickcheck      = $payload['quickcheck'] ?? array();
+    $kategorien      = $payload['kategorien'] ?? array();
+    $kosten          = $payload['kosten'] ?? array();
+    $versicherungen  = $payload['versicherungen'] ?? array();
+    $versicherungenB = $payload['versicherungenB'] ?? null;
+    $sparen_data     = $payload['sparen'] ?? array();
+    $sparen_dataB    = $payload['sparenB'] ?? null;
+    $gesellschaften  = $payload['gesellschaften'] ?? array();
+    $einkommen_total = floatval( $payload['einkommen']  ?? 0 );
+    $einkommenA      = floatval( $payload['einkommenA'] ?? 0 );
+    $einkommenB      = isset( $payload['einkommenB'] ) ? floatval( $payload['einkommenB'] ) : null;
+    $einkommen_fmt   = number_format( $einkommen_total, 0, ',', '.' );
+    $vollmacht       = ! empty( $payload['vollmacht'] ) ? 'Ja' : 'Nein';
+    $signatur        = ( $payload['signatur'] ?? 'keine' ) === 'vorhanden' ? 'Vorhanden' : 'Keine';
+    $anz_personen    = intval( $payload['kontaktPersonen'] ?? 1 );
+
+    $felder_map = qc_get_kosten_felder_map();
 
     ob_start();
     ?>
@@ -376,73 +587,103 @@ function qc_build_email_body( $payload, $partner ) {
             <?php endforeach; ?>
             </table>
 
-            <!-- Haushaltskosten -->
-            <h2 style="font-size:16px;border-bottom:2px solid #f5d86b;padding-bottom:6px;">Haushaltskosten</h2>
-            <p style="font-size:14px;color:#666;">Monatl. Netto-Einkommen: <strong>€ <?php echo $einkommen; ?></strong></p>
+            <!-- Einkommen aufgeschlüsselt -->
+            <h2 style="font-size:16px;border-bottom:2px solid #f5d86b;padding-bottom:6px;">Monatl. Netto-Einkommen</h2>
+            <table style="width:100%;font-size:14px;margin-bottom:20px;border-collapse:collapse;" cellpadding="6">
+                <tr style="border-bottom:1px solid #f0f0f0;">
+                    <td style="color:#999;width:60%;">
+                        <?php echo $anz_personen > 1 ? 'Person A' : 'Einkommen'; ?>
+                        <?php if ( $anz_personen > 1 && ! empty( $personA['name'] ) ) : ?> (<?php echo esc_html( $personA['name'] ); ?>)<?php endif; ?>
+                    </td>
+                    <td style="text-align:right;">€ <?php echo number_format( $einkommenA, 2, ',', '.' ); ?></td>
+                </tr>
+                <?php if ( $anz_personen > 1 && $einkommenB !== null ) : ?>
+                <tr style="border-bottom:1px solid #f0f0f0;">
+                    <td style="color:#999;">Person B<?php if ( ! empty( $personB['name'] ) ) : ?> (<?php echo esc_html( $personB['name'] ); ?>)<?php endif; ?></td>
+                    <td style="text-align:right;">€ <?php echo number_format( $einkommenB, 2, ',', '.' ); ?></td>
+                </tr>
+                <?php endif; ?>
+                <tr style="background:#fafafa;font-weight:600;">
+                    <td>Gesamt-Einkommen</td>
+                    <td style="text-align:right;">€ <?php echo $einkommen_fmt; ?></td>
+                </tr>
+            </table>
+
+            <!-- Haushaltskosten – Übersicht (Kategorie-Summen) -->
+            <h2 style="font-size:16px;border-bottom:2px solid #f5d86b;padding-bottom:6px;">Haushaltskosten – Übersicht</h2>
             <table style="width:100%;font-size:14px;margin-bottom:20px;border-collapse:collapse;" cellpadding="6">
                 <tr style="background:#fdf8e8;"><th style="text-align:left;">Kategorie</th><th style="text-align:right;">Betrag</th><th style="text-align:right;">Anteil</th><th style="text-align:right;">Optimal</th></tr>
                 <?php foreach ( $kategorien as $kat ) : ?>
                 <tr style="border-bottom:1px solid #f0f0f0;">
                     <td><?php echo esc_html( $kat['name'] ); ?></td>
-                    <td style="text-align:right;">€ <?php echo number_format( floatval( $kat['betrag'] ), 0, ',', '.' ); ?></td>
+                    <td style="text-align:right;">€ <?php echo number_format( floatval( $kat['betrag'] ), 2, ',', '.' ); ?></td>
                     <td style="text-align:right;"><?php echo intval( $kat['prozent'] ); ?>%</td>
                     <td style="text-align:right;"><?php echo intval( $kat['optimal'] ); ?>%</td>
                 </tr>
                 <?php endforeach; ?>
             </table>
 
-            <!-- Versicherungen Detail -->
-            <?php if ( ! empty( $versicherungen ) ) : ?>
-            <h2 style="font-size:16px;border-bottom:2px solid #f5d86b;padding-bottom:6px;">Versicherungen – Detail</h2>
-            <table style="width:100%;font-size:14px;margin-bottom:20px;border-collapse:collapse;" cellpadding="4">
-                <tr style="background:#fdf8e8;"><th style="text-align:left;">Sparte</th><th style="text-align:right;">Prämie</th><th style="text-align:left;">Gesellschaft</th><th>Info</th></tr>
-                <?php
-                $vers_labels = array(
-                    'eigenheim' => 'Eigenheim', 'haushalt' => 'Haushalt', 'haftpflicht' => 'Haftpflicht',
-                    'rechtsschutz' => 'Rechtsschutz', 'unfall' => 'Unfall', 'kranken' => 'Kranken',
-                    'berufsunfaehigkeit' => 'BU', 'kfzvers' => 'KFZ', 'ableben' => 'Ableben', 'sonstige' => 'Sonstige',
-                );
-                foreach ( $vers_labels as $key => $label ) :
-                    $v = $versicherungen[ $key ] ?? array();
-                    $betrag = floatval( $v['betrag'] ?? 0 );
-                    if ( $betrag <= 0 && empty( $v['gesellschaft'] ?? '' ) ) continue;
-                    $info = '';
-                    if ( ! empty( $v['qm'] ) ) $info = $v['qm'] . ' m²';
-                    if ( ! empty( $v['bmstufe'] ) ) $info = 'BM ' . $v['bmstufe'];
-                ?>
-                <tr style="border-bottom:1px solid #f0f0f0;">
-                    <td><?php echo esc_html( $label ); ?></td>
-                    <td style="text-align:right;">€ <?php echo number_format( $betrag, 0, ',', '.' ); ?></td>
-                    <td><?php echo esc_html( $v['gesellschaft'] ?? '—' ); ?></td>
-                    <td><?php echo esc_html( $info ?: '—' ); ?></td>
-                </tr>
-                <?php endforeach; ?>
-            </table>
-            <?php endif; ?>
-
-            <!-- Sparen Detail -->
-            <?php if ( ! empty( $sparen_data ) ) : ?>
-            <h2 style="font-size:16px;border-bottom:2px solid #f5d86b;padding-bottom:6px;">Sparen / Investment – Detail</h2>
-            <table style="width:100%;font-size:14px;margin-bottom:20px;" cellpadding="4">
-                <?php if ( ! empty( $sparen_data['giroKontostand'] ) || ! empty( $sparen_data['giroBank'] ) ) : ?>
-                <tr><td style="color:#999;width:180px;">Girokonto</td><td>Kontostand: € <?php echo number_format( floatval( $sparen_data['giroKontostand'] ?? 0 ), 0, ',', '.' ); ?> · <?php echo esc_html( $sparen_data['giroBank'] ?? '—' ); ?></td></tr>
-                <?php endif; ?>
-                <?php if ( ! empty( $sparen_data['sparMonatlich'] ) || ! empty( $sparen_data['sparKontostand'] ) ) : ?>
-                <tr><td style="color:#999;">Sparkonto</td><td>Mtl.: € <?php echo number_format( floatval( $sparen_data['sparMonatlich'] ?? 0 ), 0, ',', '.' ); ?> · Kontostand: € <?php echo number_format( floatval( $sparen_data['sparKontostand'] ?? 0 ), 0, ',', '.' ); ?></td></tr>
-                <?php endif; ?>
-                <?php if ( ! empty( $sparen_data['bausparerMonatlich'] ) || ! empty( $sparen_data['bausparerKontostand'] ) ) : ?>
-                <tr><td style="color:#999;">Bausparer</td><td>Mtl.: € <?php echo number_format( floatval( $sparen_data['bausparerMonatlich'] ?? 0 ), 0, ',', '.' ); ?> · Kontostand: € <?php echo number_format( floatval( $sparen_data['bausparerKontostand'] ?? 0 ), 0, ',', '.' ); ?></td></tr>
-                <?php endif; ?>
-                <?php if ( ! empty( $sparen_data['fonds'] ) ) : ?>
-                    <?php foreach ( $sparen_data['fonds'] as $fonds ) : ?>
-                    <tr><td style="color:#999;">Fonds/ETF</td><td><?php echo esc_html( $fonds['name'] ?? '—' ); ?> (<?php echo esc_html( $fonds['isin'] ?? '—' ); ?>) · Mtl.: € <?php echo number_format( floatval( $fonds['monatlich'] ?? 0 ), 0, ',', '.' ); ?> · Kontostand: € <?php echo number_format( floatval( $fonds['kontostand'] ?? 0 ), 0, ',', '.' ); ?></td></tr>
+            <!-- Haushaltskosten – Aufschlüsselung pro Position -->
+            <?php foreach ( $felder_map as $kat_label => $felder ) :
+                /* Prüfen ob mind. eine Position ausgefüllt ist */
+                $hat_eintraege = false;
+                foreach ( $felder as $fid => $flabel ) {
+                    if ( floatval( $kosten[ $fid ] ?? 0 ) > 0 ) { $hat_eintraege = true; break; }
+                }
+                if ( ! $hat_eintraege ) continue;
+                $kat_summe = 0;
+            ?>
+                <h3 style="font-size:14px;color:#5a5030;margin:18px 0 6px;"><?php echo esc_html( $kat_label ); ?> – Einzelpositionen</h3>
+                <table style="width:100%;font-size:13px;margin-bottom:18px;border-collapse:collapse;" cellpadding="4">
+                    <tr style="background:#fdf8e8;"><th style="text-align:left;">Position</th><th style="text-align:right;">Betrag (mtl.)</th></tr>
+                    <?php foreach ( $felder as $fid => $flabel ) :
+                        $betrag = floatval( $kosten[ $fid ] ?? 0 );
+                        if ( $betrag <= 0 ) continue;
+                        $kat_summe += $betrag;
+                    ?>
+                    <tr style="border-bottom:1px solid #f0f0f0;">
+                        <td><?php echo esc_html( $flabel ); ?></td>
+                        <td style="text-align:right;">€ <?php echo number_format( $betrag, 2, ',', '.' ); ?></td>
+                    </tr>
                     <?php endforeach; ?>
-                <?php endif; ?>
-                <?php if ( ! empty( $sparen_data['lvMonatlich'] ) || ! empty( $sparen_data['lvGesellschaft'] ) ) : ?>
-                <tr><td style="color:#999;">Lebensversicherung</td><td>Mtl.: € <?php echo number_format( floatval( $sparen_data['lvMonatlich'] ?? 0 ), 0, ',', '.' ); ?> · <?php echo esc_html( $sparen_data['lvGesellschaft'] ?? '—' ); ?></td></tr>
-                <?php endif; ?>
-            </table>
-            <?php endif; ?>
+                    <tr style="background:#fafafa;font-weight:600;">
+                        <td>Summe <?php echo esc_html( $kat_label ); ?></td>
+                        <td style="text-align:right;">€ <?php echo number_format( $kat_summe, 2, ',', '.' ); ?></td>
+                    </tr>
+                </table>
+            <?php endforeach; ?>
+
+            <!-- Versicherungen Detail (aufgeschlüsselt, alle Einträge je Sparte) -->
+            <?php
+            echo qc_render_versicherungen_table(
+                $versicherungen,
+                ( $anz_personen > 1 && ! empty( $personA['name'] ) )
+                    ? 'Versicherungen – Person A (' . $personA['name'] . ')'
+                    : 'Versicherungen – Detail'
+            );
+            if ( $anz_personen > 1 && $versicherungenB ) {
+                $titelB = ! empty( $personB['name'] )
+                    ? 'Versicherungen – Person B (' . $personB['name'] . ')'
+                    : 'Versicherungen – Person B';
+                echo qc_render_versicherungen_table( $versicherungenB, $titelB );
+            }
+            ?>
+
+            <!-- Sparen Detail (aufgeschlüsselt, alle Einträge je Typ) -->
+            <?php
+            echo qc_render_sparen_table(
+                $sparen_data,
+                ( $anz_personen > 1 && ! empty( $personA['name'] ) )
+                    ? 'Sparen / Investment – Person A (' . $personA['name'] . ')'
+                    : 'Sparen / Investment – Detail'
+            );
+            if ( $anz_personen > 1 && $sparen_dataB ) {
+                $titelSB = ! empty( $personB['name'] )
+                    ? 'Sparen / Investment – Person B (' . $personB['name'] . ')'
+                    : 'Sparen / Investment – Person B';
+                echo qc_render_sparen_table( $sparen_dataB, $titelSB );
+            }
+            ?>
 
             <!-- Vollmacht -->
             <h2 style="font-size:16px;border-bottom:2px solid #f5d86b;padding-bottom:6px;">Vollmacht</h2>
